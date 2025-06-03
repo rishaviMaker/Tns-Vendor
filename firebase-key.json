@@ -1,13 +1,3 @@
 {
-  "type": "service_account",
-  "project_id": "nirman-store",
-  "private_key_id": "7ee25984ee1e43169bd6228ae85cf4a20eff9f87",
-  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC4rFlSJe5/Mjfw\nlJAJH7rXuSDLgHGdYY3S7R7sjGNsOOtQ8L6te8FwOLbhwlAyd0EosPiuOcRneBB4\n2Wzafn/ph8nDZyZd/P2eFZDxreJ3w7JcGuu7hhgumXPW9NE/yah3lWrx/kCgd2QG\nbNk6Yh6a+VnbbxSu1+hKiIIm6wSgm1LS5zDFHZ3O9IAZXNbrs75Pb0ybxX8BTBec\nsFiL546fRSc1aQ2LrgaO9TFx9aDmJZHt2+bxNERCSLB4Q4IghxCLh4ZFt2MHFuOv\nLAfo0UMmDRbqTsXnC92mbUijawUOK6e+38+sQIL6z7V0ykkm4q0UwKj17A9ag2Za\nVXh09qiRAgMBAAECggEAD0O3DgZSyyKSbflIWZS3lowNGlJs3GJ7UlS6wmM39vKn\n0r9/h1VMJTOZkZoZ6RNN6Gg5D0+jkh43awHP0Kn1oTmR3haz3L95aDHQqAVki4aP\nwt4PylGNxKZMUAIu8faVeAL6qB4zvH/PMwUYGeO73g6f1Ivp5Ko1326epssKIss9\nTcizD9utvu+oRU0xaidnKY4MSmD6Nc1ZNtOhbyXh+Wnq81ccamfqw4K8IrLDNQ2m\nMX5AP5XcWElWFkr1VSNRRskUfzxGGv1uJp/gh6ZOyt6RNgzfoKffpXOv3A7N++i5\nUVNHLueTLCTvJi7kWj1jfuhqf+C242ZbB4H7SP+zBQKBgQDe+iiB7YhA45QWWMwg\nltFLLGYI+41nhkGoYETr4SqUnsCjr0CKIYPsuuq0opHouQSo5AC/ZYuaJmmbApsH\nlO5U3WRw70k212r2XBAVzH58GMhYb25sQf2eOWIvnF08If/E8GXuEVvSJeXzwd7T\nvEq5u0jLIdkjyDBN8hsOqJ2njQKBgQDUBfRrJnwiV37WYF6d0+UVzvVYKbIIWEqn\nPn2VM3jKGZnWYe2gMqn9DzxJWXNPpodxwbs4aJmixeOQRNet8g505BGr1M0K4Goa\nGVK/7uyOuEwt76aMnm+AhyxMJylpuiajMvMjA19OPMbp5+jgomfSsi3ulU0mKHmd\nJzZtA0ASFQKBgQDT9eNp1z3tySitsY2h8RxVpIf+Q/pgjdx+Tb1WqT3L97lSIDdu\n13tMH0cbnWqsWqzWS592UfZJ+/fptalfpLCGlcp0HNNxQYfZVxynTDR0jS5t+sdy\nO6z2qr/uWGq8zekP8iJDE9dARmx4sjO6/UPfmOwSxUNf414fymT0I09yxQKBgEYK\nmY30LrnhkaMcPuWApIMp1V8Ely2ujSrmt/HcCSEqh+mMfEWZtxJEQDQy+qbran8n\n8sNVurtNCDoWo/Fwr1nqJfRP3lSjgimRCAcj1L3pIDFko+58QHWDMh0OKt4kgrMT\nF8MPUCK2bTfERug+fnHaLtZMOCpM4LALzi0BD99pAoGAW5495YMaaRGlweggmwEY\nNdztxS9fcr3kXifaQQ50pQuulLVkXqfRB0Z3DDDi+JQXuWIVHjaIjrQrkUQd6NCO\nAeYPw6c3jmxNsqUyuhONV7Gc7/sLD5cZhdVg5CDftsLb1SegRIoOpoGSMVLz1jfj\nkjmW5SZzA/AvlGEwNgAC8E4=\n-----END PRIVATE KEY-----\n",
-  "client_email": "firebase-adminsdk-fbsvc@nirman-store.iam.gserviceaccount.com",
-  "client_id": "118417243657882658318",
-  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-  "token_uri": "https://oauth2.googleapis.com/token",
-  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40nirman-store.iam.gserviceaccount.com",
-  "universe_domain": "googleapis.com"
+
 }
