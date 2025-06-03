@@ -1,0 +1,113 @@
+const { DataTypes } = require('sequelize');
+const { sequelize } = require('../config/db');
+
+const Vendor = sequelize.define('Vendor', {
+  id: {
+    type: DataTypes.INTEGER,
+    primaryKey: true,
+    autoIncrement: true
+  },
+  fullName: {
+    type: DataTypes.STRING,
+    allowNull: false
+  },
+  email: {
+    type: DataTypes.STRING,
+    allowNull: false,
+    unique: true,
+    validate: {
+      isEmail: true
+    }
+  },
+  password: {
+    type: DataTypes.STRING,
+    allowNull: false
+  },
+  businessType: {
+    type: DataTypes.ENUM('Manufacturer', 'Distributor', 'Wholesaler', 'Retailer', 'Other'),
+    allowNull: false
+  },
+  mobileNumber: {
+    type: DataTypes.STRING,
+    allowNull: false,
+    unique: true
+  },
+  alternativeMobileNumber: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  position: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  idProofType: {
+    type: DataTypes.ENUM('Aadhar Card', 'PAN Card', 'Driving License', 'Voter ID'),
+    allowNull: false
+  },
+  idProofUrl: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  companyName: {
+    type: DataTypes.STRING,
+    allowNull: false
+  },
+  shopUrl: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  gstinNumber: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  panNumber: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  establishedYear: {
+    type: DataTypes.INTEGER,
+    allowNull: true
+  },
+  shopPhoneNumber: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  // Business Address
+  street: {
+    type: DataTypes.STRING,
+    allowNull: false
+  },
+  city: {
+    type: DataTypes.STRING,
+    allowNull: false
+  },
+  state: {
+    type: DataTypes.STRING,
+    allowNull: false
+  },
+  postalCode: {
+    type: DataTypes.STRING,
+    allowNull: false
+  },
+  country: {
+    type: DataTypes.STRING,
+    allowNull: false,
+    defaultValue: 'India'
+  },
+  isVerified: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false
+  },
+  status: {
+    type: DataTypes.ENUM('pending', 'approved', 'rejected'),
+    defaultValue: 'pending'
+  },
+  isMobileVerified: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false
+  }
+}, {
+  timestamps: true
+});
+
+module.exports = { Vendor };
