@@ -59,6 +59,60 @@ const Store = sequelize.define('Store', {
     type: DataTypes.TEXT,
     allowNull: true
   },
+  // Bank Details
+  preferred_payment_method: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  bank_name: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  ifsc_code: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  account_number: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  paypal_id: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  upi_id: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  payment_description: {
+    type: DataTypes.TEXT,
+    allowNull: true
+  },
+  // Social Media Links
+  facebook_link: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  twitter_link: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  instagram_link: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  youtube_link: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  linkedin_link: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  whatsapp_link: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
   customerId: {
     type: DataTypes.INTEGER,
     allowNull: false,

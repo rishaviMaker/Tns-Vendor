@@ -48,6 +48,10 @@ const Vendor = sequelize.define('Vendor', {
     type: DataTypes.STRING,
     allowNull: true
   },
+  idProofNumber: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
   companyName: {
     type: DataTypes.STRING,
     allowNull: false
@@ -105,6 +109,16 @@ const Vendor = sequelize.define('Vendor', {
   isMobileVerified: {
     type: DataTypes.BOOLEAN,
     defaultValue: false
+  },
+  deviceToken: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    comment: 'Firebase device token for push notifications'
+  },
+  notificationsEnabled: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: true,
+    comment: 'Whether the vendor has enabled push notifications'
   }
 }, {
   timestamps: true

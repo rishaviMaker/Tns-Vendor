@@ -6,8 +6,8 @@ const router = express.Router();
 
 // Product routes with authentication
 router.get('/', authenticate, productController.getAllProducts); // Added authentication
-router.get('/:id', productController.getProductById);
-router.get('/store/:storeId', productController.getProductsByStore);
+router.get('/:id', authenticate,productController.getProductById);
+router.get('/store/:storeId', authenticate, productController.getProductsByStore);
 
 // Protected product routes (require authentication)
 // router.post('/create', productController.upload.single('image'), productController.createProduct);

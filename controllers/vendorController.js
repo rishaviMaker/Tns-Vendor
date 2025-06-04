@@ -7,9 +7,11 @@ const otpService = require('../services/otpService');
 const notificationService = require('../services/notificationService');
 const multer = require('multer');
 const path = require('path');
+const AppError = require('../utils/AppError');
+const catchAsync = require('../utils/catchAsync');
 
 // Configure storage for ID proof uploads
-const storage = multer.diskStorage({
+const idProofStorage = multer.diskStorage({
   destination: function(req, file, cb) {
     cb(null, './uploads/id_proofs/');
   },
@@ -18,8 +20,24 @@ const storage = multer.diskStorage({
   }
 });
 
+// Configure storage for logo uploads
+const logoStorage = multer.diskStorage({
+  destination: function(req, file, cb) {
+    // Create directory if it doesn't exist
+    const fs = require('fs');
+    const dir = './uploads/logos/';
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    cb(null, dir);
+  },
+  filename: function(req, file, cb) {
+    cb(null, 'logo_' + Date.now() + path.extname(file.originalname));
+  }
+});
+
 // File filter for ID proof uploads
-const fileFilter = (req, file, cb) => {
+const idProofFileFilter = (req, file, cb) => {
   // Accept only PDF, JPG, and PNG files
   if (
     file.mimetype === 'application/pdf' ||
@@ -32,18 +50,39 @@ const fileFilter = (req, file, cb) => {
   }
 };
 
+// File filter for logo uploads
+const logoFileFilter = (req, file, cb) => {
+  // Accept only JPG, PNG, and GIF files for logos
+  if (
+    file.mimetype === 'image/jpeg' ||
+    file.mimetype === 'image/png' ||
+    file.mimetype === 'image/gif'
+  ) {
+    cb(null, true);
+  } else {
+    cb(new Error('Unsupported file format. Please upload JPG, PNG, or GIF file.'), false);
+  }
+};
+
+// ID Proof upload middleware
 exports.upload = multer({ 
-  storage: storage, 
-  fileFilter: fileFilter,
+  storage: idProofStorage, 
+  fileFilter: idProofFileFilter,
   limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
+});
+
+// Logo upload middleware
+exports.logoUpload = multer({ 
+  storage: logoStorage, 
+  fileFilter: logoFileFilter,
+  limits: { fileSize: 2 * 1024 * 1024 } // 2MB limit for logos
 });
 
 /**
  * Get all vendors
  * @route GET /api/vendors
  */
-exports.getAllVendors = async (req, res, next) => {
-  try {
+exports.getAllVendors = catchAsync(async (req, res, next) => {
     const vendors = await Vendor.findAll({
       // where: { status: 'active' },
       attributes: { exclude: ['password'] }
@@ -56,247 +95,549 @@ exports.getAllVendors = async (req, res, next) => {
         vendors
       }
     });
-  } catch (error) {
-    next(error);
-  }
-};
+});
 
 /**
  * Get vendor by ID
  * @route GET /api/vendors/:id
  */
-exports.getVendor = async (req, res, next) => {
-  try {
+exports.getVendor = catchAsync(async (req, res, next) => {
     const { id } = req.params;
 
     const vendor = await Vendor.findByPk(id, {
       attributes: { exclude: ['password'] }
     });
-
+    
     if (!vendor) {
-      return res.status(404).json({
-        status: 'fail',
-        message: 'Vendor not found'
-      });
+      return next(new AppError('Vendor not found', 404));
     }
+    
+    const store = await Store.findOne({ where: { customerId: id } });
 
     res.status(200).json({
       status: 'success',
       data: {
-        vendor
+        vendor,
+        store: store || null
       }
     });
-  } catch (error) {
-    next(error);
-  }
-};
+});
 
 /**
  * Update vendor profile
  * @route PATCH /api/vendors/profile/:id
  * @access Private (Vendor only)
  */
-exports.updateVendorProfile = async (req, res, next) => {
-  try {
+exports.updateVendorProfile = catchAsync(async (req, res, next) => {
     const { id } = req.params;
     
     const vendor = await Vendor.findByPk(id);
     
     if (!vendor) {
-      return res.status(404).json({
-        status: 'fail',
-        message: 'Vendor profile not found'
-      });
+      return next(new AppError('Vendor profile not found', 404));
     }
     
+    // Check if the authenticated user is the same as the vendor being updated
+    if (req.user && req.user.id !== vendor.id) {
+      return next(new AppError('You are not authorized to update this vendor profile', 403));
+    }
+    
+    // Track changed fields for notification
+    const changedFields = [];
+    
     const {
+      // Original fields
       vendorName,
       businessName,
       businessDescription,
-      street,
-      city,
-      state,
-      country,
-      postalCode,
       website,
       phone,
       taxId,
-      bankAccountDetails
-    } = req.body;
-    
-    // Update vendor details
-    if (vendorName) vendor.vendorName = vendorName;
-    if (businessName) vendor.businessName = businessName;
-    if (businessDescription) vendor.businessDescription = businessDescription;
-    if (street) vendor.street = street;
-    if (city) vendor.city = city;
-    if (state) vendor.state = state;
-    if (country) vendor.country = country;
-    if (postalCode) vendor.postalCode = postalCode;
-    if (website) vendor.website = website;
-    if (phone) vendor.phone = phone;
-    if (taxId) vendor.taxId = taxId;
-    if (bankAccountDetails) vendor.bankAccountDetails = bankAccountDetails;
-    
-    await vendor.save();
-    
-    // Exclude password from response
-    const vendorResponse = vendor.toJSON();
-    delete vendorResponse.password;
-    
-    res.status(200).json({
-      status: 'success',
-      data: {
-        vendor: vendorResponse
-      }
-    });
-  } catch (error) {
-    next(error);
-  }
-};
+      bankAccountDetails,
 
-/**
- * Upload vendor logo
- * @route PATCH /api/vendors/upload-logo/:id
- * @access Private (Vendor only)
- * @note This endpoint would be extended with file upload middleware
- */
-exports.uploadLogo = async (req, res, next) => {
-  try {
-    const { id } = req.params;
-    
-    const vendor = await Vendor.findByPk(id);
-    
-    if (!vendor) {
-      return res.status(404).json({
-        status: 'fail',
-        message: 'Vendor profile not found'
-      });
-    }
-    
-    // In a real application, req.file would contain the uploaded file
-    // For now, we'll assume the file path is passed in the request body
-    const { logoUrl } = req.body;
-    
-    if (!logoUrl) {
-      return res.status(400).json({
-        status: 'fail',
-        message: 'No logo provided'
-      });
-    }
-    
-    vendor.logoUrl = logoUrl;
-    await vendor.save();
-    
-    // Exclude password from response
-    const vendorResponse = vendor.toJSON();
-    delete vendorResponse.password;
-    
-    res.status(200).json({
-      status: 'success',
-      data: {
-        vendor: vendorResponse
-      }
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-/**
- * Get vendor dashboard statistics
- * @route GET /api/vendors/dashboard/:id
- * @access Private (Vendor only)
- */
-exports.getVendorDashboard = async (req, res, next) => {
-  try {
-    const { id } = req.params;
-    
-    const vendor = await Vendor.findByPk(id, {
-      attributes: { exclude: ['password'] }
-    });
-    
-    if (!vendor) {
-      return res.status(404).json({
-        status: 'fail',
-        message: 'Vendor profile not found'
-      });
-    }
-    
-    // In this simplified version, we're just returning the vendor data
-    // In a real application, we would add statistics like products, orders, revenue, etc.
-    
-    res.status(200).json({
-      status: 'success',
-      data: {
-        vendor,
-        stats: {
-          // Placeholder for future statistics
-          totalProducts: 0,
-          activeProducts: 0,
-          outOfStockProducts: 0
-        }
-      }
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-/**
- * Register a new vendor - First step (without OTP verification)
- * @route POST /api/vendors/register
- * @access Public
- */
-exports.registerVendor = async (req, res, next) => {
-  try {
-    const {
+      // Fields from registerVendor
       fullName,
       email,
-      password,
-      confirmPassword,
       businessType,
       mobileNumber,
       alternativeMobileNumber,
       position,
       idProofType,
+      idProofNumber,
       companyName,
       shopUrl,
       gstinNumber,
       panNumber,
       establishedYear,
       shopPhoneNumber,
+      
+      // Address fields
       street,
       city,
       state,
+      country,
       postalCode,
-      country
+      
+      // Bank details
+      preferredPaymentMethod,
+      bankName,
+      ifscCode,
+      accountNumber,
+      paypalId,
+      upiId,
+      paymentDescription,
+      
+      // Social media links
+      facebookLink,
+      twitterLink,
+      instagramLink,
+      youtubeLink,
+      linkedinLink,
+      whatsappLink
     } = req.body;
+    
+    // Update vendor details and track changes
+    // Original fields
+    if (vendorName && vendor.vendorName !== vendorName) {
+      vendor.vendorName = vendorName;
+      changedFields.push('vendorName');
+    }
+    if (businessName && vendor.businessName !== businessName) {
+      vendor.businessName = businessName;
+      changedFields.push('businessName');
+    }
+    if (businessDescription && vendor.businessDescription !== businessDescription) {
+      vendor.businessDescription = businessDescription;
+      changedFields.push('businessDescription');
+    }
+    if (website && vendor.website !== website) {
+      vendor.website = website;
+      changedFields.push('website');
+    }
+    if (phone && vendor.phone !== phone) {
+      vendor.phone = phone;
+      changedFields.push('phone');
+    }
+    if (taxId && vendor.taxId !== taxId) {
+      vendor.taxId = taxId;
+      changedFields.push('taxId');
+    }
+    if (bankAccountDetails && JSON.stringify(vendor.bankAccountDetails) !== JSON.stringify(bankAccountDetails)) {
+      vendor.bankAccountDetails = bankAccountDetails;
+      changedFields.push('bankAccountDetails');
+    }
 
+    // Fields from registerVendor
+    if (fullName && vendor.fullName !== fullName) {
+      vendor.fullName = fullName;
+      changedFields.push('fullName');
+    }
+    if (email && vendor.email !== email) {
+      vendor.email = email;
+      changedFields.push('email');
+    }
+    if (businessType && vendor.businessType !== businessType) {
+      vendor.businessType = businessType;
+      changedFields.push('businessType');
+    }
+    if (mobileNumber && vendor.mobileNumber !== mobileNumber) {
+      vendor.mobileNumber = mobileNumber;
+      changedFields.push('mobileNumber');
+    }
+    if (alternativeMobileNumber && vendor.alternativeMobileNumber !== alternativeMobileNumber) {
+      vendor.alternativeMobileNumber = alternativeMobileNumber;
+      changedFields.push('alternativeMobileNumber');
+    }
+    if (position && vendor.position !== position) {
+      vendor.position = position;
+      changedFields.push('position');
+    }
+    if (idProofType && vendor.idProofType !== idProofType) {
+      vendor.idProofType = idProofType;
+      changedFields.push('idProofType');
+    }
+    if (idProofNumber && vendor.idProofNumber !== idProofNumber) {
+      vendor.idProofNumber = idProofNumber;
+      changedFields.push('idProofNumber');
+    }
+    if (companyName && vendor.companyName !== companyName) {
+      vendor.companyName = companyName;
+      changedFields.push('companyName');
+    }
+    if (shopUrl && vendor.shopUrl !== shopUrl) {
+      vendor.shopUrl = shopUrl;
+      changedFields.push('shopUrl');
+    }
+    if (gstinNumber && vendor.gstinNumber !== gstinNumber) {
+      vendor.gstinNumber = gstinNumber;
+      changedFields.push('gstinNumber');
+    }
+    if (panNumber && vendor.panNumber !== panNumber) {
+      vendor.panNumber = panNumber;
+      changedFields.push('panNumber');
+    }
+    if (establishedYear && vendor.establishedYear !== establishedYear) {
+      vendor.establishedYear = establishedYear;
+      changedFields.push('establishedYear');
+    }
+    if (shopPhoneNumber && vendor.shopPhoneNumber !== shopPhoneNumber) {
+      vendor.shopPhoneNumber = shopPhoneNumber;
+      changedFields.push('shopPhoneNumber');
+    }
+    
+    // Address fields
+    if (street && vendor.street !== street) {
+      vendor.street = street;
+      changedFields.push('street');
+    }
+    if (city && vendor.city !== city) {
+      vendor.city = city;
+      changedFields.push('city');
+    }
+    if (state && vendor.state !== state) {
+      vendor.state = state;
+      changedFields.push('state');
+    }
+    if (country && vendor.country !== country) {
+      vendor.country = country;
+      changedFields.push('country');
+    }
+    if (postalCode && vendor.postalCode !== postalCode) {
+      vendor.postalCode = postalCode;
+      changedFields.push('postalCode');
+    }
+    
+    await vendor.save();
+
+    // Update related store if it exists
+    let store = null;
+    const storeChangedFields = [];
+    
+    if (vendor.id) {
+      store = await Store.findOne({ where: { customerId: vendor.id } });
+      if (store) {
+        // Update store information and track changes
+        if (companyName && store.name !== companyName) {
+          store.name = companyName;
+          storeChangedFields.push('name');
+        }
+        if (shopPhoneNumber && store.phone !== shopPhoneNumber) {
+          store.phone = shopPhoneNumber;
+          storeChangedFields.push('phone');
+        }
+        if (street && store.address !== street) {
+          store.address = street;
+          storeChangedFields.push('address');
+        }
+        if (city && store.city !== city) {
+          store.city = city;
+          storeChangedFields.push('city');
+        }
+        if (state && store.state !== state) {
+          store.state = state;
+          storeChangedFields.push('state');
+        }
+        if (postalCode && store.postal_code !== postalCode) {
+          store.postal_code = postalCode;
+          storeChangedFields.push('postal_code');
+        }
+        if (country && store.country !== country) {
+          store.country = country;
+          storeChangedFields.push('country');
+        }
+        if (businessDescription && store.description !== businessDescription) {
+          store.description = businessDescription;
+          storeChangedFields.push('description');
+        }
+        if (website && store.website !== website) {
+          store.website = website;
+          storeChangedFields.push('website');
+        }
+        if (gstinNumber && store.gstin !== gstinNumber) {
+          store.gstin = gstinNumber;
+          storeChangedFields.push('gstin');
+        }
+        if (panNumber && store.pan !== panNumber) {
+          store.pan = panNumber;
+          storeChangedFields.push('pan');
+        }
+        if (establishedYear && store.established_year !== establishedYear) {
+          store.established_year = establishedYear;
+          storeChangedFields.push('established_year');
+        }
+        if (businessType && store.business_type !== businessType) {
+          store.business_type = businessType;
+          storeChangedFields.push('business_type');
+        }
+        
+        // Social media links
+        if (facebookLink && store.facebook_link !== facebookLink) {
+          store.facebook_link = facebookLink;
+          storeChangedFields.push('facebook_link');
+        }
+        if (twitterLink && store.twitter_link !== twitterLink) {
+          store.twitter_link = twitterLink;
+          storeChangedFields.push('twitter_link');
+        }
+        if (instagramLink && store.instagram_link !== instagramLink) {
+          store.instagram_link = instagramLink;
+          storeChangedFields.push('instagram_link');
+        }
+        if (youtubeLink && store.youtube_link !== youtubeLink) {
+          store.youtube_link = youtubeLink;
+          storeChangedFields.push('youtube_link');
+        }
+        if (linkedinLink && store.linkedin_link !== linkedinLink) {
+          store.linkedin_link = linkedinLink;
+          storeChangedFields.push('linkedin_link');
+        }
+        if (whatsappLink && store.whatsapp_link !== whatsappLink) {
+          store.whatsapp_link = whatsappLink;
+          storeChangedFields.push('whatsapp_link');
+        }
+        
+        store.updated_at = new Date();
+        
+        await store.save();
+      }
+    }
+    
+    // Send notifications if there were changes
+    const eventNotificationService = require('../services/eventNotificationService');
+    
+    // Send vendor profile update notification if fields were changed
+    if (changedFields.length > 0) {
+      await eventNotificationService.notifyVendorProfileUpdated(vendor, changedFields);
+    }
+    
+    // Send store update notification if store fields were changed
+    if (store && storeChangedFields.length > 0) {
+      await eventNotificationService.notifyStoreUpdated(store, vendor.id, storeChangedFields);
+    }
+    
+    // Exclude password from response
+    const vendorResponse = vendor.toJSON();
+    delete vendorResponse.password;
+    
+    res.status(200).json({
+      status: 'success',
+      data: {
+        vendor: vendorResponse,
+        store: vendor.id ? await Store.findOne({ where: { customerId: vendor.id } }) : null
+      }
+    });
+});
+
+/**
+ * Upload vendor logo
+ * @route PATCH /api/vendors/upload-logo/:id
+ * @access Private (Vendor only)
+ * @note This endpoint uses file upload middleware to handle logo uploads
+ */
+exports.uploadLogo = catchAsync(async (req, res, next) => {
+    const { id } = req.params;
+
+    const vendor = await Vendor.findByPk(id);
+
+    if (!vendor) {
+      return next(new AppError('Vendor not found', 404));
+    }
+
+    // Check if the authenticated user is the same as the vendor being updated
+    if (req.user && req.user.id !== vendor.id) {
+      return next(new AppError('You are not authorized to upload logo for this vendor', 403));
+    }
+
+    // Check if file was uploaded
+    if (!req.file) {
+      return next(new AppError('No logo file provided', 400));
+    }
+    
+    // Validate file size (additional validation if needed)
+    if (req.file.size > 5 * 1024 * 1024) { // 5MB limit
+      return next(new AppError('Logo file size exceeds the 5MB limit', 400));
+    }
+    
+    // Get the file path of the uploaded logo
+    const logoUrl = `/uploads/logos/${req.file.filename}`;
+    
+    // Update the vendor's logo URL
+    vendor.logoUrl = logoUrl;
+    await vendor.save();
+    
+    // Also update the store logo if this vendor has a store
+    const store = await Store.findOne({ where: { customerId: id } });
+    if (store) {
+      store.logo = logoUrl;
+      await store.save();
+    }
+    
+    // Exclude password from response
+    const vendorResponse = vendor.toJSON();
+    delete vendorResponse.password;
+    
+    res.status(200).json({
+      status: 'success',
+      message: 'Logo uploaded successfully',
+      data: {
+        vendor: vendorResponse,
+        store: store || null
+      }
+    });
+});
+
+/**
+ * Get vendor dashboard statistics
+ * @route GET /api/vendors/dashboard/:id
+ * @access Private (Vendor only)
+ */
+exports.getVendorDashboard = catchAsync(async (req, res, next) => {
+    const { id } = req.params;
+    
+    const vendor = await Vendor.findByPk(id);
+    
+    if (!vendor) {
+      return next(new AppError('Vendor not found', 404));
+    }
+    
+    // Check if the authenticated user is the same as the vendor being accessed
+    if (req.user && req.user.id !== vendor.id) {
+      return next(new AppError('You are not authorized to access this vendor dashboard', 403));
+    }
+    
+    // Get associated store data if exists
+    const store = await Store.findOne({ where: { customerId: vendor.id } });
+    
+    // Exclude password from response
+    const vendorResponse = vendor.toJSON();
+    delete vendorResponse.password;
+    
+    res.status(200).json({
+      status: 'success',
+      data: {
+        vendor: vendorResponse,
+        store: store || null,
+        stats: {
+          totalOrders: 0,  // Placeholder for actual order count
+          pendingOrders: 0,  // Placeholder for pending orders
+          revenue: 0,  // Placeholder for revenue
+          products: 0  // Placeholder for product count
+        }
+      }
+    });
+});
+
+/**
+ * Register a new vendor - First step (without OTP verification)
+ * @route POST /api/vendors/register
+ * @access Public
+ */
+exports.registerVendor = catchAsync(async (req, res, next) => {
+  const {
+    fullName,
+    email,
+    password,
+    confirmPassword,
+    businessType,
+    mobileNumber,
+    alternativeMobileNumber,
+    position,
+    idProofType,
+    idProofNumber,
+    companyName,
+    shopUrl,
+    gstinNumber,
+    panNumber,
+    establishedYear,
+    shopPhoneNumber,
+    street,
+    city,
+    state,
+    postalCode,
+    country,
+    deviceToken
+  } = req.body;
+
+  // Validate required fields
+  if (!fullName) {
+    return next(new AppError('Full name is required', 400));
+  }
+  
+  if (!email) {
+    return next(new AppError('Email is required', 400));
+  }
+  
+  if (!password) {
+    return next(new AppError('Password is required', 400));
+  }
+  
+  if (!businessType) {
+    return next(new AppError('Business type is required', 400));
+  }
+  
+  if (!mobileNumber) {
+    return next(new AppError('Mobile number is required', 400));
+  }
+  
+  if (!companyName) {
+    return next(new AppError('Company name is required', 400));
+  }
+  
+  // Validate password match
+  if (password !== confirmPassword) {
+    return next(new AppError('Passwords do not match', 400));
+  }
+  
+  // Validate password strength
+  if (password.length < 8) {
+    return next(new AppError('Password must be at least 8 characters long', 400));
+  }
+    
+    if (!email) {
+      return next(new AppError('Email is required', 400));
+    }
+    
+    if (!password) {
+      return next(new AppError('Password is required', 400));
+    }
+    
+    if (!businessType) {
+      return next(new AppError('Business type is required', 400));
+    }
+    
+    if (!mobileNumber) {
+      return next(new AppError('Mobile number is required', 400));
+    }
+    
+    if (!companyName) {
+      return next(new AppError('Company name is required', 400));
+    }
+    
     // Validate password match
     if (password !== confirmPassword) {
-      return res.status(400).json({
-        status: 'fail',
-        message: 'Passwords do not match'
-      });
+      return next(new AppError('Passwords do not match', 400));
+    }
+    
+    // Validate password strength
+    if (password.length < 8) {
+      return next(new AppError('Password must be at least 8 characters long', 400));
     }
 
     // Check if vendor already exists with this email
     const existingVendorByEmail = await Vendor.findOne({ where: { email } });
     if (existingVendorByEmail) {
-      return res.status(400).json({
-        status: 'fail',
-        message: 'Email already in use'
-      });
+      return next(new AppError('Email already in use', 400));
     }
 
     // Check if vendor already exists with this mobile number
     const existingVendorByMobile = await Vendor.findOne({ where: { mobileNumber } });
     if (existingVendorByMobile) {
-      return res.status(400).json({
-        status: 'fail',
-        message: 'Mobile number already in use'
-      });
+      return next(new AppError('Mobile number already in use', 400));
+    }
+    
+    // Validate ID proof type
+    if (idProofType && !['Aadhar Card', 'PAN Card', 'Driving License', 'Voter ID'].includes(idProofType)) {
+      return next(new AppError('Invalid ID proof type. Must be one of: Aadhar Card, PAN Card, Driving License, Voter ID', 400));
     }
 
     // Hash password
@@ -316,6 +657,7 @@ exports.registerVendor = async (req, res, next) => {
       alternativeMobileNumber,
       position,
       idProofType,
+      idProofNumber,
       idProofUrl,
       companyName,
       shopUrl,
@@ -332,28 +674,32 @@ exports.registerVendor = async (req, res, next) => {
       isMobileVerified: false
     });
 
-    // Generate and send OTP
-    const otpRecord = await otpService.createOTP(mobileNumber);
-    const otpSent = await otpService.sendOTP(mobileNumber, otpRecord.otp);
+    // Save device token if provided
+    if (deviceToken) {
+      newVendor.deviceToken = deviceToken;
+      newVendor.notificationsEnabled = true;
+    }
 
-    // Create store entry in mp_stores table
-    const storeData = await Store.create({
+    // Save the vendor to the database
+    await newVendor.save();
+
+    // Create a new store associated with this vendor
+    const store = await Store.create({
       name: companyName,
-      phone: shopPhoneNumber,
+      customerId: newVendor.id,
+      phone: shopPhoneNumber || mobileNumber,
       address: street,
       city,
       state,
-      country: country || 'India',
-      gst_no: gstinNumber,
-      pan_no: panNumber,
+      country,
+      postal_code: postalCode,
       established_year: establishedYear,
+      gstin: gstinNumber,
+      pan: panNumber,
       business_type: businessType,
-      logo: null, // Will be updated later
-      description: null, // Can be updated later
-      content: null, // Can be updated later
-      customerId: newVendor.id,
+      description: '',
       status: 'pending',
-      vendor_verified_at: null, // Will be set when vendor is verified
+      vendor_verified_at: null,
       created_at: new Date(),
       updated_at: new Date()
     });
@@ -378,25 +724,24 @@ exports.registerVendor = async (req, res, next) => {
         store: storeData
       }
     });
-  } catch (error) {
-    next(error);
-  }
-};
+});
 
 /**
  * Send OTP for mobile verification
  * @route POST /api/vendors/send-otp
  * @access Public
  */
-exports.sendOTP = async (req, res, next) => {
-  try {
+exports.sendOTP = catchAsync(async (req, res, next) => {
     const { mobileNumber, deviceToken } = req.body;
 
     if (!mobileNumber) {
-      return res.status(400).json({
-        status: 'fail',
-        message: 'Mobile number is required'
-      });
+      return next(new AppError('Mobile number is required', 400));
+    }
+    
+    // Validate mobile number format (basic validation)
+    const mobileRegex = /^[0-9]{10}$/;
+    if (!mobileRegex.test(mobileNumber)) {
+      return next(new AppError('Invalid mobile number format. Must be 10 digits', 400));
     }
 
     // Generate and send OTP
@@ -413,135 +758,245 @@ exports.sendOTP = async (req, res, next) => {
       );
     }
 
+    // Check if OTP was created successfully
+    if (!otpRecord) {
+      return next(new AppError('Failed to generate OTP', 500));
+    }
+    
     res.status(200).json({
       status: 'success',
-      otp:otpRecord.otp,
+      otp: otpRecord.otp,
       message: otpSent ? 'OTP sent successfully' : 'There was an issue sending OTP'
     });
-  } catch (error) {
-    next(error);
-  }
-};
+});
 
 /**
  * Verify OTP and update vendor's mobile verification status
  * @route POST /api/vendors/verify-otp
  * @access Public
  */
-exports.verifyOTP = async (req, res, next) => {
-  try {
-    const { mobileNumber, otp, vendorId } = req.body;
+/**
+ * Update device token and notification preferences
+ * @route PATCH /api/vendors/device-token
+ * @access Private (Vendor only)
+ */
+exports.updateDeviceToken = catchAsync(async (req, res, next) => {
+    const { deviceToken, notificationsEnabled } = req.body;
+    const vendorId = req.user.id;
+    
+    // Validate device token if provided
+    if (deviceToken !== undefined && (!deviceToken || typeof deviceToken !== 'string')) {
+      return next(new AppError('Valid device token is required', 400));
+    }
+    
+    // Find the vendor
+    const vendor = await Vendor.findByPk(vendorId);
+    if (!vendor) {
+      return next(new AppError('Vendor not found', 404));
+    }
+    
+    // Update device token if provided
+    if (deviceToken !== undefined) {
+      vendor.deviceToken = deviceToken;
+      
+      // Subscribe to topics if token is provided and different from existing
+      if (deviceToken && vendor.deviceToken !== deviceToken) {
+        const eventNotificationService = require('../services/eventNotificationService');
+        await eventNotificationService.subscribeDeviceToTopics(deviceToken, 'vendor', vendor.id);
+      }
+    }
+    
+    // Update notifications preference if provided
+    if (notificationsEnabled !== undefined) {
+      vendor.notificationsEnabled = !!notificationsEnabled;
+    }
+    
+    await vendor.save();
+    
+    // Exclude password from response
+    const vendorResponse = vendor.toJSON();
+    delete vendorResponse.password;
+    
+    res.status(200).json({
+      status: 'success',
+      message: 'Device token and notification preferences updated successfully',
+      data: {
+        vendor: vendorResponse
+      }
+    });
+});
 
-    if (!mobileNumber || !otp) {
-      return res.status(400).json({
-        status: 'fail',
-        message: 'Mobile number and OTP are required'
-      });
+exports.verifyOTP = catchAsync(async (req, res, next) => {
+    const { mobileNumber, otp, vendorId, deviceToken } = req.body;
+
+    if (!mobileNumber) {
+      return next(new AppError('Mobile number is required', 400));
+    }
+    
+    if (!otp) {
+      return next(new AppError('OTP is required', 400));
+    }
+    
+    // Validate mobile number format
+    const mobileRegex = /^[0-9]{10}$/;
+    if (!mobileRegex.test(mobileNumber)) {
+      return next(new AppError('Invalid mobile number format. Must be 10 digits', 400));
+    }
+    
+    // Validate OTP format (assuming it's a 6-digit number)
+    const otpRegex = /^[0-9]{6}$/;
+    if (!otpRegex.test(otp)) {
+      return next(new AppError('Invalid OTP format. Must be 6 digits', 400));
     }
 
     // Verify OTP
     const verificationResult = await otpService.verifyOTP(mobileNumber, otp);
 
     if (!verificationResult.verified) {
-      return res.status(400).json({
-        status: 'fail',
-        message: verificationResult.message
-      });
+      return next(new AppError(verificationResult.message || 'OTP verification failed', 400));
     }
 
     // If vendorId is provided, update the vendor's mobile verification status
     if (vendorId) {
       const vendor = await Vendor.findByPk(vendorId);
-      if (vendor && vendor.mobileNumber === mobileNumber) {
-        vendor.isMobileVerified = true;
-        await vendor.save();
+      
+      if (!vendor) {
+        return next(new AppError('Vendor not found with the provided ID', 404));
       }
+      
+      if (vendor.mobileNumber !== mobileNumber) {
+        return next(new AppError('Mobile number does not match the vendor record', 400));
+      }
+      
+      vendor.isMobileVerified = true;
+      
+      // Update device token if provided
+      if (deviceToken && vendor.deviceToken !== deviceToken) {
+        vendor.deviceToken = deviceToken;
+        vendor.notificationsEnabled = true;
+        
+        // Subscribe to relevant topics after saving
+        const eventNotificationService = require('../services/eventNotificationService');
+        await eventNotificationService.subscribeDeviceToTopics(deviceToken, 'vendor', vendor.id);
+      }
+      
+      await vendor.save();
     }
 
     res.status(200).json({
       status: 'success',
       message: 'OTP verified successfully'
     });
-  } catch (error) {
-    next(error);
-  }
-};
+});
 
 /**
  * Login vendor
  * @route POST /api/vendors/login
  * @access Public
  */
-exports.loginVendor = async (req, res, next) => {
-  try {
-    const { email, password } = req.body;
+exports.loginVendor = catchAsync(async (req, res, next) => {
+    const { email, password, deviceToken } = req.body;
+    
+    // Validate required fields
+    if (!email) {
+      return next(new AppError('Email is required', 400));
+    }
+    
+    if (!password) {
+      return next(new AppError('Password is required', 400));
+    }
+    
+    // Validate email format
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!emailRegex.test(email)) {
+      return next(new AppError('Invalid email format', 400));
+    }
 
     // Check if vendor exists
     const vendor = await Vendor.findOne({ where: { email } });
     if (!vendor) {
-      return res.status(401).json({
-        status: 'fail',
-        message: 'Invalid credentials'
-      });
+      // Use 401 for authentication failures but with a more specific message
+      return next(new AppError('No vendor found with this email', 401));
     }
 
     // Check if password is correct
     const isMatch = await bcrypt.compare(password, vendor.password);
     if (!isMatch) {
-      return res.status(401).json({
-        status: 'fail',
-        message: 'Invalid credentials'
-      });
+      return next(new AppError('Incorrect password', 401));
+    }
+    
+    // Check if vendor account is active
+    if (vendor.status === 'rejected') {
+      return next(new AppError('Your account has been rejected. Please contact support.', 403));
     }
 
     // Generate JWT token
-    const token = jwt.sign(
-      { id: vendor.id, email: vendor.email },
-      process.env.JWT_SECRET,
-      { expiresIn: '1d' }
-    );
+    let token;
+    try {
+      token = jwt.sign(
+        { id: vendor.id, role: 'vendor' },
+        process.env.JWT_SECRET,
+        { expiresIn: '30d' }
+      );
+    } catch (error) {
+      return next(new AppError('Error generating authentication token', 500));
+    }
 
-    // Exclude password from response
-    const vendorResponse = vendor.toJSON();
+    // Get associated store data if exists
+    const store = await Store.findOne({ where: { customerId: vendor.id } });
+
+    // Remove password from response
+    const vendorResponse = { ...vendor.toJSON() };
     delete vendorResponse.password;
 
+    // Update device token if provided
+    if (deviceToken) {
+      // Update only if it's different from the existing token
+      if (vendor.deviceToken !== deviceToken) {
+        vendor.deviceToken = deviceToken;
+        await vendor.save();
+        
+        // Subscribe to relevant topics
+        const eventNotificationService = require('../services/eventNotificationService');
+        await eventNotificationService.subscribeDeviceToTopics(deviceToken, 'vendor', vendor.id);
+      }
+    }
+    
     res.status(200).json({
       status: 'success',
-      message: 'Login successful',
       token,
       data: {
-        vendor: vendorResponse
+        vendor: vendorResponse,
+        store: store || null
       }
     });
-  } catch (error) {
-    next(error);
-  }
-};
+});
 
 /**
  * Upload ID Proof for Vendor
  * @route POST /api/vendors/upload-id-proof/:id
  * @access Private
  */
-exports.uploadIdProof = async (req, res, next) => {
-  try {
+exports.uploadIdProof = catchAsync(async (req, res, next) => {
     const { id } = req.params;
 
     if (!req.file) {
-      return res.status(400).json({
-        status: 'fail',
-        message: 'No file uploaded or invalid file format'
-      });
+      return next(new AppError('No file uploaded or invalid file format', 400));
     }
 
     const vendor = await Vendor.findByPk(id);
     
     if (!vendor) {
-      return res.status(404).json({
-        status: 'fail',
-        message: 'Vendor not found'
-      });
+      return next(new AppError('Vendor not found', 404));
     }
+    
+    // Check if the authenticated user is the same as the vendor being updated
+    if (req.user && req.user.id !== vendor.id) {
+      return next(new AppError('You are not authorized to upload ID proof for this vendor', 403));
+    }
+    
+    // Get associated store data
+    const store = await Store.findOne({ where: { customerId: id } });
     
     // Update vendor with ID proof URL
     vendor.idProofUrl = `/uploads/id_proofs/${req.file.filename}`;
@@ -555,10 +1010,8 @@ exports.uploadIdProof = async (req, res, next) => {
       status: 'success',
       message: 'ID proof uploaded successfully',
       data: {
-        vendor: vendorResponse
+        vendor: vendorResponse,
+        store: store || null
       }
     });
-  } catch (error) {
-    next(error);
-  }
-};
+});

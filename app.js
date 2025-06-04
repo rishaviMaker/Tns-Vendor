@@ -12,6 +12,8 @@ const vendorRoutes = require('./routes/vendorRoutes');
 const storeRoutes = require('./routes/storeRoutes');
 const categoryRoutes = require('./routes/categoryRoutes');
 const productRoutes = require('./routes/productRoutes');
+const orderRoutes = require('./routes/orderRoutes');
+const discountRoutes = require('./routes/discountRoutes');
 
 // Import error handler middleware
 const errorHandler = require('./middlewares/errorHandler');
@@ -31,6 +33,8 @@ app.use('/api/vendors', vendorRoutes);
 app.use('/api/stores', storeRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/products', productRoutes);
+app.use('/api/orders', orderRoutes);
+app.use('/api/coupons', discountRoutes);
 
 // Health check route
 app.get('/health', (req, res) => {
