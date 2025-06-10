@@ -4,6 +4,59 @@ const AppError = require('../utils/AppError');
 const { sequelize } = require('../config/db');
 
 /**
+ * Helper function to calculate payment summary for an order with its products
+ * @param {Object} order - The order object
+ * @param {Array} products - Array of order products with quantities and prices
+ * @returns {Object} Payment summary object with product subtotal, tax details, fees, etc.
+ */
+const calculateOrderPaymentSummary = (order, products = []) => {
+  // Calculate from products if available, otherwise use order values directly
+  const productSubtotal = products.length > 0 ? 
+    products.reduce((sum, product) => sum + (parseFloat(product.price) * product.qty), 0) : 
+    parseFloat(order.sub_total || 0);
+  
+  const productTaxAmount = products.length > 0 ? 
+    products.reduce((sum, product) => {
+      const taxAmount = product.tax_amount ? parseFloat(product.tax_amount) * product.qty : 0;
+      return sum + taxAmount;
+    }, 0) : 
+    parseFloat(order.tax_amount || 0);
+  
+  // Calculate GST components
+  const gstRate = 0.18; // 18% GST - adjust as needed
+  const estimatedGST = productTaxAmount > 0 ? productTaxAmount : (productSubtotal * gstRate);
+  const sgstAmount = estimatedGST / 2;
+  const cgstAmount = estimatedGST / 2;
+  
+  // Calculate fees
+  const serviceFee = 0; // Add service fee calculation if applicable
+  const platformFee = 0; // Add platform fee calculation if applicable
+  const shippingFee = order.shipping_amount ? parseFloat(order.shipping_amount) : 0;
+  
+  // Calculate final totals
+  const discountAmount = order.discount_amount ? parseFloat(order.discount_amount) : 0;
+  const calculatedTotal = productSubtotal + productTaxAmount + shippingFee + serviceFee + platformFee - discountAmount;
+
+  return {
+    product_subtotal: parseFloat(productSubtotal.toFixed(2)),
+    tax_details: {
+      total_tax: parseFloat(productTaxAmount.toFixed(2)),
+      gst: parseFloat(estimatedGST.toFixed(2)),
+      sgst: parseFloat(sgstAmount.toFixed(2)),
+      cgst: parseFloat(cgstAmount.toFixed(2))
+    },
+    fees: {
+      service_fee: serviceFee,
+      platform_fee: platformFee,
+      shipping_fee: shippingFee
+    },
+    discount: discountAmount,
+    grand_total: parseFloat(calculatedTotal.toFixed(2)),
+    paid_amount: order.payment ? parseFloat(order.payment.amount || 0) : 0
+  };
+};
+
+/**
  * Get all orders for a specific store
  * @route GET /api/orders/store/:storeId
  * @access Private
@@ -27,6 +80,11 @@ exports.getOrdersByStoreId = async (req, res, next) => {
       );
       console.log(`Raw SQL query found ${rawOrders.length} orders`);
       
+      // Import models needed for detailed product information
+      const { OrderProduct } = require('../models/OrderProduct');
+      const { Product } = require('../models/Product');
+      const { Payment } = require('../models/Payment');
+      
       // Now try with the ORM
       const orders = await Order.findAll({
         where: { store_id: storeIdNum },
@@ -36,12 +94,117 @@ exports.getOrdersByStoreId = async (req, res, next) => {
       
       console.log(`Sequelize ORM found ${orders.length} orders`);
       
+      // Fetch product data and payments for all orders to calculate accurate payment summaries
+      const orderIds = orders.map(order => order.id);
+      
+      // Fetch all order products in a single query
+      const allOrderProducts = await OrderProduct.findAll({
+        where: { order_id: orderIds }
+      });
+      
+      // Group products by order_id
+      const productsByOrder = {};
+      allOrderProducts.forEach(product => {
+        if (!productsByOrder[product.order_id]) {
+          productsByOrder[product.order_id] = [];
+        }
+        productsByOrder[product.order_id].push(product);
+      });
+      
+      // Fetch all products for enrichment
+      const productIds = allOrderProducts.map(op => op.product_id);
+      const products = await Product.findAll({
+        where: { id: productIds },
+        attributes: ['id', 'name', 'description', 'sku', 'images', 'image', 'price', 'sale_price', 'stock_status', 'quantity']
+      });
+      
+      // Create a map for easy product lookup
+      const productMap = {};
+      products.forEach(product => {
+        productMap[product.id] = product;
+      });
+      
+      // Fetch payments for all orders
+      const payments = await Payment.findAll({
+        where: { order_id: orderIds }
+      });
+      
+      // Create a map for easy payment lookup
+      const paymentMap = {};
+      payments.forEach(payment => {
+        paymentMap[payment.order_id] = payment;
+      });
+      
+      // Process orders to include payment summary for each one
+      const processedOrders = orders.map(order => {
+        const orderData = order.toJSON();
+        
+        // Get order products
+        const orderProducts = productsByOrder[order.id] || [];
+        
+        // Get associated payment
+        const orderPayment = paymentMap[order.id];
+        orderData.payment = orderPayment;
+        
+        // Enrich order products with product details
+        const enrichedProducts = orderProducts.map(orderProduct => {
+          const productDetail = productMap[orderProduct.product_id] || null;
+          const productData = orderProduct.toJSON();
+          
+          // Format decimal fields
+          productData.price = parseFloat(productData.price);
+          if (productData.tax_amount) productData.tax_amount = parseFloat(productData.tax_amount);
+          
+          // Add additional product details if available
+          if (productDetail) {
+            const additionalDetails = productDetail.toJSON();
+            delete additionalDetails.id; // Avoid duplicate ID
+            
+            // Format product prices
+            if (additionalDetails.price) additionalDetails.price = parseFloat(additionalDetails.price);
+            if (additionalDetails.sale_price) additionalDetails.sale_price = parseFloat(additionalDetails.sale_price);
+            
+            // Parse images if stored as JSON string
+            if (typeof additionalDetails.images === 'string') {
+              try {
+                additionalDetails.images = JSON.parse(additionalDetails.images);
+              } catch (e) {
+                console.log(`Could not parse images for product ${productDetail.id}:`, e.message);
+              }
+            }
+            
+            return {
+              ...productData,
+              product_detail: additionalDetails
+            };
+          }
+          
+          return productData;
+        });
+        
+        // Calculate payment summary with the enriched products
+        const paymentSummary = calculateOrderPaymentSummary(orderData, enrichedProducts);
+        
+        // Add payment summary and enriched products to order data
+        return {
+          ...orderData,
+          payment_summary: paymentSummary,
+          products: enrichedProducts,
+          // Update amount fields with calculated values
+          amount: paymentSummary.grand_total,
+          tax_amount: paymentSummary.tax_details.total_tax,
+          shipping_amount: paymentSummary.fees.shipping_fee,
+          discount_amount: paymentSummary.discount,
+          sub_total: paymentSummary.product_subtotal
+        };
+      });
+      
       // Return the formatted response
       return res.status(200).json({
         status: 'success',
-        results: orders.length,
+        results: processedOrders.length,
         data: {
-          orders
+          orders: processedOrders
         }
       });
     } catch (sqlError) {
@@ -49,6 +212,11 @@ exports.getOrdersByStoreId = async (req, res, next) => {
       
       // Fallback - try with Sequelize findAll without any filters first
       try {
+        // Import models needed for detailed product information if not already imported
+        const { OrderProduct } = require('../models/OrderProduct');
+        const { Product } = require('../models/Product');
+        const { Payment } = require('../models/Payment');
+        
         const allOrders = await Order.findAll({
           limit: 100,
           order: [['created_at', 'DESC']]
@@ -64,11 +232,115 @@ exports.getOrdersByStoreId = async (req, res, next) => {
         
         console.log(`Filtered to ${filteredOrders.length} orders for store ${storeIdNum}`);
         
+        // Get order IDs for fetching related data
+        const orderIds = filteredOrders.map(order => order.id);
+        
+        // Fetch all order products in a single query
+        const allOrderProducts = await OrderProduct.findAll({
+          where: { order_id: orderIds }
+        });
+        
+        // Group products by order_id
+        const productsByOrder = {};
+        allOrderProducts.forEach(product => {
+          if (!productsByOrder[product.order_id]) {
+            productsByOrder[product.order_id] = [];
+          }
+          productsByOrder[product.order_id].push(product);
+        });
+        
+        // Fetch all products for enrichment
+        const productIds = allOrderProducts.map(op => op.product_id);
+        const products = await Product.findAll({
+          where: { id: productIds },
+          attributes: ['id', 'name', 'description', 'sku', 'images', 'image', 'price', 'sale_price', 'stock_status', 'quantity']
+        });
+        
+        // Create a map for easy product lookup
+        const productMap = {};
+        products.forEach(product => {
+          productMap[product.id] = product;
+        });
+        
+        // Fetch payments for all orders
+        const payments = await Payment.findAll({
+          where: { order_id: orderIds }
+        });
+        
+        // Create a map for easy payment lookup
+        const paymentMap = {};
+        payments.forEach(payment => {
+          paymentMap[payment.order_id] = payment;
+        });
+        // Process orders to include payment summary for each one
+        const processedOrders = filteredOrders.map(order => {
+          const orderData = order.toJSON();
+
+          // Get order products
+          const orderProducts = productsByOrder[order.id] || [];
+          
+          // Get associated payment
+          const orderPayment = paymentMap[order.id];
+          orderData.payment = orderPayment;
+          
+          // Enrich order products with product details
+          const enrichedProducts = orderProducts.map(orderProduct => {
+            const productDetail = productMap[orderProduct.product_id] || null;
+            const productData = orderProduct.toJSON();
+            
+            // Format decimal fields
+            productData.price = parseFloat(productData.price);
+            if (productData.tax_amount) productData.tax_amount = parseFloat(productData.tax_amount);
+            
+            // Add additional product details if available
+            if (productDetail) {
+              const additionalDetails = productDetail.toJSON();
+              delete additionalDetails.id; // Avoid duplicate ID
+              
+              // Format product prices
+              if (additionalDetails.price) additionalDetails.price = parseFloat(additionalDetails.price);
+              if (additionalDetails.sale_price) additionalDetails.sale_price = parseFloat(additionalDetails.sale_price);
+              
+              // Parse images if stored as JSON string
+              if (typeof additionalDetails.images === 'string') {
+                try {
+                  additionalDetails.images = JSON.parse(additionalDetails.images);
+                } catch (e) {
+                  console.log(`Could not parse images for product ${productDetail.id}:`, e.message);
+                }
+              }
+              
+              return {
+                ...productData,
+                product_detail: additionalDetails
+              };
+            }
+            
+            return productData;
+          });
+          
+          // Calculate payment summary with the enriched products
+          const paymentSummary = calculateOrderPaymentSummary(orderData, enrichedProducts);
+          
+          // Add payment summary and enriched products to order data
+          return {
+            ...orderData,
+            payment_summary: paymentSummary,
+            products: enrichedProducts,
+            // Update amount fields with calculated values
+            amount: paymentSummary.grand_total,
+            tax_amount: paymentSummary.tax_details.total_tax,
+            shipping_amount: paymentSummary.fees.shipping_fee,
+            discount_amount: paymentSummary.discount,
+            sub_total: paymentSummary.product_subtotal
+          };
+        });
+        
         return res.status(200).json({
           status: 'success',
-          results: filteredOrders.length,
+          results: processedOrders.length,
           data: {
-            orders: filteredOrders
+            orders: processedOrders
           }
         });
       } catch (fallbackError) {
@@ -218,6 +490,11 @@ exports.getOrderById = async (req, res, next) => {
       
       console.log(`Enriched ${enrichedProducts.length} order products with product details`);
       
+      // Calculate payment summary using the helper function
+      const orderObj = basicOrder.toJSON();
+      orderObj.payment = payment;
+      const paymentSummary = calculateOrderPaymentSummary(orderObj, enrichedProducts);
+      
       // Combine all data and format response
       const orderData = {
         ...basicOrder.toJSON(),
@@ -228,12 +505,14 @@ exports.getOrderById = async (req, res, next) => {
         payment: payment ? payment.toJSON() : null,
         vendor_payments: vendorPayments.length > 0 ? vendorPayments.map(p => p.toJSON()) : [],
         products: enrichedProducts, // Add the enriched products to the response
-        // Ensure correct data types for decimal fields
-        amount: parseFloat(basicOrder.amount),
-        tax_amount: basicOrder.tax_amount ? parseFloat(basicOrder.tax_amount) : null,
-        shipping_amount: basicOrder.shipping_amount ? parseFloat(basicOrder.shipping_amount) : null,
-        discount_amount: basicOrder.discount_amount ? parseFloat(basicOrder.discount_amount) : null,
-        sub_total: parseFloat(basicOrder.sub_total)
+        // Add payment summary
+        payment_summary: paymentSummary,
+        // Update amount fields with calculated values from payment summary
+        amount: paymentSummary.grand_total,
+        tax_amount: paymentSummary.tax_details.total_tax,
+        shipping_amount: paymentSummary.fees.shipping_fee,
+        discount_amount: paymentSummary.discount,
+        sub_total: paymentSummary.product_subtotal
       };
       
       // Format shipment decimals if they exist

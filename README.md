@@ -9,6 +9,7 @@ A Node.js backend system focused exclusively on vendor/seller management with My
 - **Store Management**: Create and manage vendor stores with products and categories.
 - **Order Management**: Track and manage customer orders.
 - **Coupon Management**: Create and manage discount coupons with various types and conditions.
+- **Withdrawal Management**: Request and track fund withdrawals with different payment channels and status tracking.
 - **Push Notifications**: Real-time notifications using Firebase Cloud Messaging.
 
 ## Tech Stack
@@ -181,6 +182,16 @@ npm start
 - `POST /api/coupons` - Create a new coupon
 - `PATCH /api/coupons/:id` - Update coupon details
 - `DELETE /api/coupons/:id` - Delete a coupon
+
+### Withdrawal Routes
+
+- `GET /api/withdrawals` - Get all withdrawals with optional filtering
+- `GET /api/withdrawals/:id` - Get withdrawal details by ID
+- `POST /api/withdrawals` - Create a new withdrawal request
+- `PATCH /api/withdrawals/:id/cancel` - Cancel a withdrawal request
+- `POST /api/withdrawals/:id/retry` - Retry a failed withdrawal request
+- `GET /api/withdrawals/export-csv` - Export withdrawals as CSV
+- `GET /api/withdrawals/export-excel` - Export withdrawals as Excel
 
 ## Coupon Management System
 

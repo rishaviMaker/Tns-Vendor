@@ -442,3 +442,88 @@ exports.updateVendorDeviceToken = async (vendorId, deviceToken) => {
     return false;
   }
 };
+
+/**
+ * Send notification about withdrawal status change
+ * @param {Object} withdrawal - The withdrawal that was updated
+ * @param {string} oldStatus - Previous status
+ * @param {string} newStatus - New status
+ * @param {number} vendorId - ID of the vendor who made the withdrawal
+ * @param {Object} additionalInfo - Any additional information about the withdrawal (optional)
+ */
+exports.notifyWithdrawalStatusChanged = async (withdrawal, oldStatus, newStatus, vendorId, additionalInfo = {}) => {
+  try {
+    // Get vendor details
+    const vendor = await Vendor.findByPk(vendorId);
+    const vendorName = vendor ? vendor.fullName || vendor.businessName || 'A vendor' : 'A vendor';
+    
+    // Format amount with currency
+    const formattedAmount = new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD' // You may want to use the actual currency from the withdrawal if available
+    }).format(withdrawal.amount);
+    
+    // Create appropriate message based on status
+    let statusMessage = '';
+    switch (newStatus) {
+      case 'approved':
+        statusMessage = `Your withdrawal request for ${formattedAmount} has been approved.`;
+        break;
+      case 'processing':
+        statusMessage = `Your withdrawal request for ${formattedAmount} is now being processed.`;
+        break;
+      case 'completed':
+        statusMessage = `Your withdrawal for ${formattedAmount} has been completed. The funds should be in your account shortly.`;
+        break;
+      case 'rejected':
+        statusMessage = `Your withdrawal request for ${formattedAmount} was rejected. ${additionalInfo.reason || 'Please contact support for more information.'}`;
+        break;
+      case 'cancelled':
+        statusMessage = `Your withdrawal request for ${formattedAmount} has been cancelled.`;
+        break;
+      default:
+        statusMessage = `Your withdrawal request for ${formattedAmount} status changed from ${oldStatus} to ${newStatus}.`;
+    }
+    
+    // Notification details
+    const title = 'Withdrawal Status Updated';
+    const body = statusMessage;
+    const data = {
+      type: 'withdrawal',
+      entityId: withdrawal.id.toString(),
+      action: 'status_changed',
+      vendorId: vendorId.toString(),
+      oldStatus,
+      newStatus,
+      amount: withdrawal.amount.toString(),
+      withdrawalId: withdrawal.id.toString(),
+      timestamp: new Date().toISOString(),
+      ...additionalInfo
+    };
+    
+    // Send to vendor's device if they have a token
+    if (vendor && vendor.deviceToken) {
+      await notificationService.sendNotification(vendor.deviceToken, title, body, data);
+    }
+    
+    // Send to vendor's specific topic
+    const vendorTopic = `vendor_${vendorId}`;
+    await notificationService.sendTopicNotification(vendorTopic, title, body, data);
+    
+    // Notify admins about important withdrawal status changes
+    const importantStatusChanges = ['approved', 'rejected', 'completed'];
+    if (importantStatusChanges.includes(newStatus)) {
+      await notificationService.sendTopicNotification(TOPICS.ADMIN_ALERTS, 
+        'Withdrawal Status Change', 
+        `Vendor ${vendorName} (ID: ${vendorId}) withdrawal for ${formattedAmount} changed to ${newStatus}`,
+        data
+      );
+    }
+    
+    console.log('Withdrawal status change notification sent successfully');
+    return true;
+  } catch (error) {
+    console.error('Error sending withdrawal status change notification:', error);
+    return false;
+  }
+};

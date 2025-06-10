@@ -23,6 +23,8 @@ exports.getCoupons = async (req, res, next) => {
     
     const storeId = store.id;
 
+    // Now that we've confirmed the new columns exist in the database,
+    // we can include them in our query
     const coupons = await Discount.findAll({
       where: { store_id: storeId },
       order: [['created_at', 'DESC']]
@@ -62,6 +64,8 @@ exports.getCouponById = async (req, res, next) => {
     
     const storeId = store.id;
 
+    // Now that we've confirmed the new columns exist in the database,
+    // we can include them in our query
     const coupon = await Discount.findOne({
       where: { 
         id,
@@ -163,10 +167,14 @@ exports.createCoupon = async (req, res, next) => {
       start_date,
       end_date,
       can_use_with_promotion,
-      product_scope, // 'all_products', 'specific_product', 'product_collections'
+      product_scope, // 'all_products', 'specific_product', 'product_collections', 'categories', 'subcategories'
       product_quantity,
       target_products, // For specific products or collections
-      min_order_price
+      target_categories, // For category-specific discounts
+      target_subcategories, // For subcategory-specific discounts
+      min_order_price,
+      never_expire, // Boolean to indicate if coupon never expires
+      unlimited_used // Boolean to indicate if coupon can be used unlimited times
     } = req.body;
 
     // Validate required fields
@@ -192,6 +200,8 @@ exports.createCoupon = async (req, res, next) => {
 
     // Determine the target value based on product scope
     let targetValue = 'all-orders'; // Default for all products
+    let categoriesValue = null;
+    let subcategoriesValue = null;
     
     if (product_scope === 'specific_product' && target_products) {
       try {
@@ -216,6 +226,40 @@ exports.createCoupon = async (req, res, next) => {
       } catch (error) {
         return next(new AppError('Invalid target products format. Must be a valid array of product IDs', 400));
       }
+    } else if (product_scope === 'categories' && target_categories) {
+      try {
+        const categoryIds = Array.isArray(target_categories) ? target_categories : JSON.parse(target_categories);
+        if (categoryIds.length > 0) {
+          // Store category IDs as a JSON string
+          categoriesValue = JSON.stringify(categoryIds);
+        }
+      } catch (error) {
+        return next(new AppError('Invalid target categories format. Must be a valid array of category IDs', 400));
+      }
+    } else if (product_scope === 'subcategories' && target_subcategories) {
+      try {
+        const subcategoryIds = Array.isArray(target_subcategories) ? target_subcategories : JSON.parse(target_subcategories);
+        if (subcategoryIds.length > 0) {
+          // Store subcategory IDs as a JSON string
+          subcategoriesValue = JSON.stringify(subcategoryIds);
+        }
+      } catch (error) {
+        return next(new AppError('Invalid target subcategories format. Must be a valid array of subcategory IDs', 400));
+      }
+    }
+
+    // Handle never_expire and unlimited_used fields
+    const effectiveEndDate = never_expire ? null : (end_date || null);
+    const effectiveQuantity = unlimited_used ? null : (quantity || null);
+    
+    // Determine discount_on value based on product_scope
+    let discountOn = 'all-orders';
+    if (product_scope === 'specific_product') {
+      discountOn = 'product';
+    } else if (product_scope === 'categories') {
+      discountOn = 'categories';
+    } else if (product_scope === 'subcategories') {
+      discountOn = 'subcategories';
     }
 
     // Create the coupon - using the actual database structure we discovered
@@ -225,15 +269,20 @@ exports.createCoupon = async (req, res, next) => {
       type: 'coupon', // This is fixed as 'coupon' in the database
       type_option: discount_type, // 'percentage', 'amount', or 'shipping' goes here
       value,
-      quantity: quantity || null,
+      quantity: effectiveQuantity,
       start_date: start_date || new Date(),
-      end_date: end_date || null,
+      end_date: effectiveEndDate,
       total_used: 0,
       can_use_with_promotion: can_use_with_promotion || false,
-      discount_on: product_scope === 'specific_product' ? 'product' : 'all-orders',
+      discount_on: discountOn,
       product_quantity: product_quantity || 1,
       target: targetValue,
       min_order_price: min_order_price || null,
+      // New fields
+      never_expire: never_expire || false,
+      unlimited_used: unlimited_used || false,
+      categories: categoriesValue,
+      subcategories: subcategoriesValue,
       store_id: storeId,
       created_at: new Date(),
       updated_at: new Date()
@@ -293,10 +342,14 @@ exports.updateCoupon = async (req, res, next) => {
       start_date,
       end_date,
       can_use_with_promotion,
-      product_scope, // 'all_products', 'specific_product', 'product_collections'
+      product_scope, // 'all_products', 'specific_product', 'product_collections', 'categories', 'subcategories'
       product_quantity,
       target_products, // Target product IDs as array
-      min_order_price
+      target_categories, // For category-specific discounts
+      target_subcategories, // For subcategory-specific discounts
+      min_order_price,
+      never_expire, // Boolean to indicate if coupon never expires
+      unlimited_used // Boolean to indicate if coupon can be used unlimited times
     } = req.body;
 
     // If updating code, check it doesn't conflict
@@ -321,6 +374,9 @@ exports.updateCoupon = async (req, res, next) => {
 
     // Process target products if provided
     let targetValue = coupon.target; // Keep current value by default
+    let categoriesValue = coupon.categories; // Keep current value by default
+    let subcategoriesValue = coupon.subcategories; // Keep current value by default
+    
     if (product_scope === 'specific_product' && target_products) {
       try {
         const productIds = Array.isArray(target_products) ? target_products : JSON.parse(target_products);
@@ -344,8 +400,60 @@ exports.updateCoupon = async (req, res, next) => {
       } catch (error) {
         return next(new AppError('Invalid target products format. Must be a valid array of product IDs', 400));
       }
+    } else if (product_scope === 'categories' && target_categories) {
+      try {
+        const categoryIds = Array.isArray(target_categories) ? target_categories : JSON.parse(target_categories);
+        if (categoryIds.length > 0) {
+          // Store category IDs as a JSON string
+          categoriesValue = JSON.stringify(categoryIds);
+        }
+      } catch (error) {
+        return next(new AppError('Invalid target categories format. Must be a valid array of category IDs', 400));
+      }
+    } else if (product_scope === 'subcategories' && target_subcategories) {
+      try {
+        const subcategoryIds = Array.isArray(target_subcategories) ? target_subcategories : JSON.parse(target_subcategories);
+        if (subcategoryIds.length > 0) {
+          // Store subcategory IDs as a JSON string
+          subcategoriesValue = JSON.stringify(subcategoryIds);
+        }
+      } catch (error) {
+        return next(new AppError('Invalid target subcategories format. Must be a valid array of subcategory IDs', 400));
+      }
     } else if (product_scope === 'all_products') {
       targetValue = 'all-orders';
+    }
+
+    // Handle never_expire and unlimited_used fields
+    // If never_expire is true, set end_date to null
+    let effectiveEndDate = end_date;
+    if (never_expire !== undefined && never_expire) {
+      effectiveEndDate = null;
+    } else if (never_expire !== undefined && !never_expire && !end_date) {
+      // If never_expire is being turned off but no end_date provided, use a default
+      const defaultEndDate = new Date();
+      defaultEndDate.setMonth(defaultEndDate.getMonth() + 1); // Default 1 month from now
+      effectiveEndDate = defaultEndDate;
+    }
+    
+    // If unlimited_used is true, set quantity to null
+    let effectiveQuantity = quantity;
+    if (unlimited_used !== undefined && unlimited_used) {
+      effectiveQuantity = null;
+    }
+    
+    // Determine discount_on value based on product_scope
+    let discountOn;
+    if (product_scope) {
+      if (product_scope === 'specific_product') {
+        discountOn = 'product';
+      } else if (product_scope === 'categories') {
+        discountOn = 'categories';
+      } else if (product_scope === 'subcategories') {
+        discountOn = 'subcategories';
+      } else if (product_scope === 'all_products') {
+        discountOn = 'all-orders';
+      }
     }
 
     // Update the coupon
@@ -354,14 +462,18 @@ exports.updateCoupon = async (req, res, next) => {
       ...(code && { code }),
       ...(discount_type && { type_option: discount_type }), // Update type_option field with discount_type
       ...(value !== undefined && { value }),
-      ...(quantity !== undefined && { quantity }),
+      ...(effectiveQuantity !== undefined && { quantity: effectiveQuantity }),
       ...(start_date && { start_date }),
-      ...(end_date && { end_date }),
+      ...(effectiveEndDate !== undefined && { end_date: effectiveEndDate }),
       ...(can_use_with_promotion !== undefined && { can_use_with_promotion }),
-      ...(product_scope && { discount_on: product_scope === 'specific_product' ? 'product' : 'all-orders' }),
+      ...(discountOn && { discount_on: discountOn }),
       ...(product_quantity !== undefined && { product_quantity }),
       ...(targetValue !== coupon.target && { target: targetValue }),
+      ...(categoriesValue !== coupon.categories && { categories: categoriesValue }),
+      ...(subcategoriesValue !== coupon.subcategories && { subcategories: subcategoriesValue }),
       ...(min_order_price !== undefined && { min_order_price }),
+      ...(never_expire !== undefined && { never_expire }),
+      ...(unlimited_used !== undefined && { unlimited_used }),
       updated_at: new Date()
     };
 

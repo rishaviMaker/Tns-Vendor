@@ -68,6 +68,27 @@ const Discount = sequelize.define('Discount', {
     type: DataTypes.DECIMAL(15, 2),
     allowNull: true
   },
+  // New fields
+  never_expire: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false,
+    defaultValue: false
+  },
+  unlimited_used: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false,
+    defaultValue: false
+  },
+  categories: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+    comment: 'JSON string of category IDs'
+  },
+  subcategories: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+    comment: 'JSON string of subcategory IDs'
+  },
   created_at: {
     type: DataTypes.DATE,
     allowNull: true

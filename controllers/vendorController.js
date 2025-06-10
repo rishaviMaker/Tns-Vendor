@@ -369,7 +369,35 @@ exports.updateVendorProfile = catchAsync(async (req, res, next) => {
           store.business_type = businessType;
           storeChangedFields.push('business_type');
         }
-        
+        // Bank
+        if(preferredPaymentMethod && store.preferred_payment_method !== preferredPaymentMethod){
+          store.preferred_payment_method = preferredPaymentMethod;
+          storeChangedFields.push('preferred_payment_method');
+        }
+        if(bankName && store.bank_name !== bankName){
+          store.bank_name = bankName;
+          storeChangedFields.push('bank_name');
+        }
+        if(ifscCode && store.ifsc_code !== ifscCode){
+          store.ifsc_code = ifscCode;
+          storeChangedFields.push('ifsc_code');
+        }
+        if(accountNumber && store.account_number !== accountNumber){
+          store.account_number = accountNumber;
+          storeChangedFields.push('account_number');
+        }
+        if(paypalId && store.paypal_id !== paypalId){
+          store.paypal_id = paypalId;
+          storeChangedFields.push('paypal_id');
+        }
+        if(upiId && store.upi_id !== upiId){
+          store.upi_id = upiId;
+          storeChangedFields.push('upi_id');
+        }
+        if(paymentDescription && store.payment_description !== paymentDescription){
+          store.payment_description = paymentDescription;
+          storeChangedFields.push('payment_description');
+        }
         // Social media links
         if (facebookLink && store.facebook_link !== facebookLink) {
           store.facebook_link = facebookLink;
@@ -636,9 +664,9 @@ exports.registerVendor = catchAsync(async (req, res, next) => {
     }
     
     // Validate ID proof type
-    if (idProofType && !['Aadhar Card', 'PAN Card', 'Driving License', 'Voter ID'].includes(idProofType)) {
-      return next(new AppError('Invalid ID proof type. Must be one of: Aadhar Card, PAN Card, Driving License, Voter ID', 400));
-    }
+    // if (idProofType && !['Aadhar Card', 'PAN Card', 'Driving License', 'Voter ID'].includes(idProofType)) {
+    //   return next(new AppError('Invalid ID proof type. Must be one of: Aadhar Card, PAN Card, Driving License, Voter ID', 400));
+    // }
 
     // Hash password
     const salt = await bcrypt.genSalt(10);
@@ -704,6 +732,32 @@ exports.registerVendor = catchAsync(async (req, res, next) => {
       updated_at: new Date()
     });
 
+    // Generate and send OTP to the mobile number
+    let otpSent = false;
+    let otpRecord = null;
+    
+    try {
+      // Create OTP record
+      otpRecord = await otpService.createOTP(mobileNumber);
+      
+      // Send OTP via SMS
+      otpSent = await otpService.sendOTP(mobileNumber, otpRecord.otp, deviceToken);
+      
+      // Send push notification with OTP if device token is provided
+      if (deviceToken) {
+        await notificationService.sendNotification(
+          deviceToken,
+          'OTP Verification',
+          `Your OTP is ${otpRecord.otp}. It will expire in 10 minutes.`,
+          { type: 'otp', otp: otpRecord.otp }
+        );
+      }
+    } catch (error) {
+      console.error('Error sending OTP during registration:', error);
+      // We'll continue with registration even if OTP fails
+      // The message in the response will indicate there was an issue
+    }
+
     // Generate JWT token
     const token = jwt.sign(
       { id: newVendor.id, email: newVendor.email },
@@ -721,7 +775,7 @@ exports.registerVendor = catchAsync(async (req, res, next) => {
       message: otpSent ? 'Vendor registered successfully. OTP sent to your mobile number.' : 'Vendor registered successfully, but there was an issue sending OTP.',
       data: {
         vendor: vendorResponse,
-        store: storeData
+        store: store
       }
     });
 });

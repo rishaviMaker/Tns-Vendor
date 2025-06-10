@@ -3,8 +3,8 @@ require('dotenv').config();
 const axios = require('axios');
 
 // Configuration - adjust as needed
-const API_BASE_URL = 'http://localhost:5000/api';
-const AUTH_TOKEN = 'YOUR_AUTH_TOKEN'; // Replace with actual vendor auth token
+const API_BASE_URL = 'http://localhost:4000/api';
+const AUTH_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MTAsImlhdCI6MTcxNzc0MTY2MiwiZXhwIjoxNzI1NTE3NjYyfQ.eFT2QBDPQlUkYBGzWgXgRMzpBCQMzjgozSlnfjKwpGQ'; // Replace with actual vendor auth token
 
 // Set up axios with default configuration
 const api = axios.create({
@@ -41,7 +41,9 @@ async function testCreateCoupon(code) {
       end_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
       can_use_with_promotion: false,
       product_scope: 'all_products',
-      product_quantity: 1
+      product_quantity: 1,
+      never_expire: false,
+      unlimited_used: false
     };
     
     const response = await api.post('/coupons', couponData);

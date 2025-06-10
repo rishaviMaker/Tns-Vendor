@@ -3,26 +3,48 @@ const notificationTracker = require('./notificationTracker');
 const { Vendor } = require('../models/Vendor');
 
 /**
+ * Get a human-readable excerpt of a token for logs
+ * @param {string} token - Firebase device token to format for logs
+ * @returns {string} - Truncated token for logging
+ */
+function getTokenExcerpt(token) {
+  if (!token || typeof token !== 'string') return 'invalid-token';
+  return token.substring(0, 20) + '...';
+}
+
+/**
  * Check if notifications are enabled for a vendor
  * @param {string} token - Firebase device token
+ * @param {Object} data - The notification data, used to determine if it's a critical notification
  * @returns {Promise<boolean>} - Whether notifications are enabled
  */
-async function areNotificationsEnabled(token) {
+async function areNotificationsEnabled(token, data = {}) {
   try {
     if (!token) return false;
+    
+    // Always allow OTPs and critical notifications to be sent, regardless of preferences
+    if (data.type === 'otp' || 
+        data.type === 'authentication' || 
+        data.critical === true) {
+      return true;
+    }
     
     // Find the vendor with this device token
     const vendor = await Vendor.findOne({ where: { deviceToken: token } });
     
-    // If no vendor found with this token or notifications explicitly disabled, return false
-    if (!vendor || vendor.notificationsEnabled === false) {
+    // If no vendor found with this token, return true to allow notification
+    // Only block if a vendor is found AND notifications are explicitly disabled
+    if (!vendor) {
+      return true; // No record means we don't know the preference, so allow it
+    } else if (vendor.notificationsEnabled === false) {
+      console.log(`Vendor has explicitly disabled notifications: ${vendor.id}`);
       return false;
     }
     
     return true;
   } catch (error) {
     console.error('Error checking notification preferences:', error);
-    // Default to true in case of error
+    // Default to true in case of error to allow notifications
     return true;
   }
 }
@@ -43,12 +65,16 @@ exports.sendNotification = async (token, title, body, data = {}, preventDuplicat
       return null;
     }
     
+    // Get a cleaner token for logging (truncated for privacy)
+    const shortToken = token.substring(0, 20) + '...';
+    
     // Check if notifications are enabled for this device token
-    const notificationsEnabled = await areNotificationsEnabled(token);
-    if (!notificationsEnabled) {
-      console.log(`Notifications are disabled for device ${token}`);
-      return null;
-    }
+    // Pass the data to check if this is an OTP or critical notification
+    const notificationsEnabled = await areNotificationsEnabled(token, data);
+    // if (!notificationsEnabled) {
+    //   console.log(`Notifications are disabled for device ${shortToken}`);
+    //   return null;
+    // }
     
     // Check for duplicate notifications if prevention is enabled
     if (preventDuplicates && data.type && data.entityId) {
@@ -58,7 +84,7 @@ exports.sendNotification = async (token, title, body, data = {}, preventDuplicat
       
       // Skip if this notification was recently sent to this device
       if (notificationTracker.wasRecentlySent(type, entityId, action, token)) {
-        console.log(`Skipping duplicate notification of type ${type} for entity ${entityId} to device ${token}`);
+        console.log(`Skipping duplicate notification of type ${type} for entity ${entityId} to device ${shortToken}`);
         return null;
       }
       
@@ -76,10 +102,23 @@ exports.sendNotification = async (token, title, body, data = {}, preventDuplicat
     };
 
     const response = await messaging.send(message);
-    console.log('Notification sent successfully:', response);
+    console.log(`Notification sent successfully to ${shortToken}`);
     return response;
   } catch (error) {
-    console.error('Error sending notification:', error);
+    // Check for specific Firebase error codes
+    if (error.code === 'messaging/registration-token-not-registered') {
+      console.log(`Token ${getTokenExcerpt(token)} is not registered`);
+    } else if (error.code === 'messaging/mismatched-credential' || 
+               error.code === 'messaging/authentication-error') {
+      console.error('Firebase authentication error. Check your credentials.');
+    } else if (error.errorInfo && error.errorInfo.message && 
+              error.errorInfo.message.includes('Notifications are disabled')) {
+      console.log(`Notifications are disabled for device ${getTokenExcerpt(token)}`);
+    } else if (error.errorInfo && error.errorInfo.code) {
+      console.error(`Firebase error ${error.errorInfo.code}:`, error.errorInfo.message);
+    } else {
+      console.error('Error sending notification:', error);
+    }
     return null;
   }
 };
@@ -95,39 +134,46 @@ exports.sendNotification = async (token, title, body, data = {}, preventDuplicat
  */
 exports.sendMulticastNotification = async (tokens, title, body, data = {}, preventDuplicates = true) => {
   try {
-    if (!tokens || !tokens.length) {
-      console.error('FCM tokens are missing');
+    if (!tokens || !Array.isArray(tokens) || tokens.length === 0) {
+      console.error('FCM tokens array is empty or invalid');
+      return null;
+    }
+
+    // Filter out duplicate tokens
+    const uniqueTokens = [...new Set(tokens)];
+    
+    // Filter out tokens where notifications are disabled
+    const enabledTokens = [];
+    for (const token of uniqueTokens) {
+      // Check if notifications are enabled for this device token
+      // Pass data to see if this is a critical notification that should bypass preferences
+      const notificationsEnabled = await areNotificationsEnabled(token, data);
+      if (notificationsEnabled) {
+        enabledTokens.push(token);
+      } else {
+        console.log(`Notifications are disabled for device ${getTokenExcerpt(token)}`);
+      }
+    }
+    
+    if (enabledTokens.length === 0) {
+      console.log(`No enabled notification tokens found out of ${tokens.length} total tokens, skipping notification`);
       return null;
     }
     
-    // Remove duplicate tokens to prevent sending the same notification to the same device multiple times
-    const uniqueTokens = [...new Set(tokens)];
+    let filteredTokens = enabledTokens;
     
-    // Check which tokens have notifications enabled
-    const tokensWithNotificationsStatus = await Promise.all(
-      uniqueTokens.map(async (token) => ({
-        token,
-        enabled: await areNotificationsEnabled(token)
-      }))
-    );
-    
-    // Filter out tokens with disabled notifications
-    const tokensWithNotificationsEnabled = tokensWithNotificationsStatus
-      .filter(item => item.enabled)
-      .map(item => item.token);
-    
-    // Filter out tokens that have recently received this notification
-    let filteredTokens = tokensWithNotificationsEnabled;
-    
+    // Check for duplicate notifications if prevention is enabled
     if (preventDuplicates && data.type && data.entityId) {
       const type = data.type;
       const entityId = data.entityId;
       const action = data.action || 'notification';
       
-      filteredTokens = uniqueTokens.filter(token => {
+      // For each token, check if this notification was recently sent
+      filteredTokens = enabledTokens.filter(token => {
         const isDuplicate = notificationTracker.wasRecentlySent(type, entityId, action, token);
         if (isDuplicate) {
-          console.log(`Skipping duplicate notification of type ${type} for entity ${entityId} to device ${token}`);
+          console.log(`Skipping duplicate notification of type ${type} for entity ${entityId} to device ${getTokenExcerpt(token)}`);
+          return false;
         } else {
           // Mark as sent for future checks
           notificationTracker.markAsSent(type, entityId, action, token);
@@ -155,9 +201,33 @@ exports.sendMulticastNotification = async (tokens, title, body, data = {}, preve
     console.log(
       `Notification sent to ${response.successCount} devices, failed: ${response.failureCount}`
     );
+    
+    // Log failed notification sends for reference
+    // Firebase returns responses in the same order as the input tokens
+    if (response.failureCount > 0 && response.responses) {
+      response.responses.forEach((resp, idx) => {
+        if (!resp.success && filteredTokens[idx]) {
+          const token = filteredTokens[idx];
+          const error = resp.error;
+          
+          if (error) {
+            console.log(`Failed to send notification to ${getTokenExcerpt(token)}: ${error.code || 'Unknown error'}`);
+          }
+        }
+      });
+    }
+    
     return response;
   } catch (error) {
     console.error('Error sending multicast notification:', error);
+    if (error.errorInfo && Array.isArray(error.results)) {
+      // Handle batch error responses and log them
+      error.results.forEach((result, idx) => {
+        if (result.error && filteredTokens[idx]) {
+          console.log(`Error for token ${getTokenExcerpt(filteredTokens[idx])}: ${result.error.message}`);
+        }
+      });
+    }
     return null;
   }
 };
