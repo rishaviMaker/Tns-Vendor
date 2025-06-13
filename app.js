@@ -16,6 +16,9 @@ const orderRoutes = require('./routes/orderRoutes');
 const discountRoutes = require('./routes/discountRoutes');
 const withdrawalRoutes = require('./routes/withdrawalRoutes');
 const revenueRoutes = require('./routes/revenueRoutes');
+const productSearchRoutes = require('./routes/productSearchRoutes');
+const productRequestRoutes = require('./routes/productRequestRoutes');
+const dashboardRoutes = require('./routes/dashboardRoutes');
 
 // Import error handler middleware
 const errorHandler = require('./middlewares/errorHandler');
@@ -39,6 +42,9 @@ app.use('/api/orders', orderRoutes);
 app.use('/api/coupons', discountRoutes);
 app.use('/api/withdrawals', withdrawalRoutes);
 app.use('/api/revenue', revenueRoutes);
+app.use('/api/product-search', productSearchRoutes);
+app.use('/api/product-requests', productRequestRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 
 // Health check route
 app.get('/health', (req, res) => {
@@ -59,7 +65,10 @@ app.get('/', (req, res) => {
       categories: '/api/categories',
       orders: '/api/orders',
       coupons: '/api/coupons',
-      withdrawals: '/api/withdrawals'
+      withdrawals: '/api/withdrawals',
+      productRequests: '/api/product-requests',
+      productSearch: '/api/product-search',
+      dashboard: '/api/dashboard'
     }
   });
 });

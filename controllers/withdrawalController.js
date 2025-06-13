@@ -155,7 +155,7 @@ exports.createWithdrawal = async (req, res, next) => {
     
     // Validate against available revenue
     const validation = await revenueService.validateWithdrawalAmount(vendorId, amount);
-    
+    console.log(validation);
     if (!validation.isValid) {
       return next(new AppError(
         `Insufficient funds. Available balance: ₹${validation.available.toFixed(2)}, ` +
@@ -174,6 +174,23 @@ exports.createWithdrawal = async (req, res, next) => {
         return next(new AppError('Please provide complete bank information for bank transfers', 400));
       }
     }
+    const totalWithdrawals = await CustomerWithdrawal.sum('amount', {
+      where: {
+        customer_id: vendorId,
+        status: 'completed'
+      }
+    }) || 0;
+    
+    // Get total fees paid
+    const totalFees = await CustomerWithdrawal.sum('fee', {
+      where: {
+        customer_id: vendorId,
+        status: 'completed'
+      }
+    }) || 0;
+    const currentBalance = validation?.available - totalWithdrawals - totalFees;
+
+    console.log("dsadsacurrentBalance", currentBalance);
     
     // Create the withdrawal record
     const withdrawal = await CustomerWithdrawal.create({
@@ -183,6 +200,7 @@ exports.createWithdrawal = async (req, res, next) => {
       payment_channel,
       transaction_id,
       description,
+      current_balance: currentBalance,
       bank_info: bank_info ? JSON.stringify(bank_info) : null,
       status: 'pending'
     });

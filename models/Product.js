@@ -153,6 +153,16 @@ const Product = sequelize.define('Product', {
     type: DataTypes.TEXT, // For storing multiple video URLs as JSON
     allowNull: true
   },
+  shipping_charges: {
+    type: DataTypes.DECIMAL(10, 2), // Amount in INR
+    allowNull: true,
+    defaultValue: 0
+  },
+  shipping_included: {
+    type: DataTypes.BOOLEAN,
+    allowNull: true,
+    defaultValue: false
+  },
   purchase_price: {
     type: DataTypes.DECIMAL(15, 2),
     allowNull: true

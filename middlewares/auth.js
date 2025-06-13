@@ -80,7 +80,14 @@ const authorize = (...roles) => {
       });
     }
 
-    if (!roles.includes(req.user.role)) {
+    // Since we're using the Vendor model, all authenticated users are vendors
+    // If 'vendor' is in the allowed roles, proceed
+    if (roles.includes('vendor')) {
+      return next();
+    }
+    
+    // For other roles, check if role exists and matches
+    if (!req.user.role || !roles.includes(req.user.role)) {
       return res.status(403).json({ 
         status: 'fail', 
         message: 'Not authorized to access this resource' 

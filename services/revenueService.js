@@ -22,8 +22,8 @@ const revenueService = {
           [sequelize.fn('COUNT', sequelize.col('id')), 'transaction_count']
         ],
         where: {
-          customer_id: vendorId,
-          customer_type: 'vendor', // Ensure we only get vendor-related payments
+          customer_id: vendorId
+           // Ensure we only get vendor-related payments
           // We don't filter by refunded_amount here as we'll handle that separately
         },
         group: ['status']

@@ -18,18 +18,12 @@ router.patch('/status/:id', authenticate, productController.updateProductStatus)
 // For multiple image and video uploads
 router.post('/create', 
   authenticate, // Add authentication middleware
-  productController.upload.fields([
-    { name: 'images', maxCount: 10 },
-    { name: 'videos', maxCount: 5 }
-  ]), 
+  productController.upload, // Use the pre-configured upload middleware
   productController.createProduct);
 
 router.patch('/update/:id', 
   authenticate, // Add authentication middleware
-  productController.upload.fields([
-    { name: 'images', maxCount: 10 },
-    { name: 'videos', maxCount: 5 }
-  ]), 
+  productController.upload, // Use the pre-configured upload middleware
   productController.updateProduct);
 
 module.exports = router;

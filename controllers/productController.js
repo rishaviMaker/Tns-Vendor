@@ -1,46 +1,48 @@
 const { Product } = require('../models/Product');
 const { Store } = require('../models/Store');
+const { ProductRequest } = require('../models/ProductRequest');
+const productSearchService = require('../services/productSearchService');
+const AppError = require('../utils/AppError');
 const multer = require('multer');
 const path = require('path');
+const fs = require('fs');
 
 // Configure storage for product files (images and videos)
 const storage = multer.diskStorage({
   destination: function(req, file, cb) {
-    if (file.fieldname === 'videos') {
-      cb(null, './uploads/products/videos/');
-    } else {
-      cb(null, './uploads/products/');
+    // Create the directory if it doesn't exist
+    const uploadPath = 'public/uploads/products';
+    if (!fs.existsSync(uploadPath)) {
+      fs.mkdirSync(uploadPath, { recursive: true });
     }
+    cb(null, uploadPath);
   },
   filename: function(req, file, cb) {
-    const prefix = file.fieldname === 'videos' ? 'video_' : 'product_';
-    cb(null, prefix + Date.now() + '_' + Math.round(Math.random() * 1E9) + path.extname(file.originalname));
+    // Generate unique filename with appropriate file type indicator
+    const fileType = file.mimetype.startsWith('video/') ? 'video' : 'image';
+    cb(null, `product-${fileType}-${Date.now()}${path.extname(file.originalname)}`);
   }
 });
 
 // File filter for product files (images and videos)
 const fileFilter = (req, file, cb) => {
-  // Accept image files for image/images fields
-  if ((file.fieldname === 'image' || file.fieldname === 'images') && file.mimetype.startsWith('image/')) {
-    cb(null, true);
-  } 
-  // Accept video files for videos field
-  else if (file.fieldname === 'videos' && (
-    file.mimetype.startsWith('video/') || 
-    file.mimetype === 'application/mp4' ||
-    file.mimetype === 'application/x-mpegURL'
-  )) {
-    cb(null, true);
-  } else {
-    cb(new Error(`Unsupported file format for ${file.fieldname}. Please upload appropriate files only.`), false);
+  // Accept images and videos
+  if (!file.originalname.match(/\.(jpg|jpeg|png|gif|mp4|webm|mov|avi)$/)) {
+    return cb(new Error('Only image and video files are allowed!'), false);
   }
+  cb(null, true);
 };
 
+// Create upload middleware
 exports.upload = multer({ 
-  storage: storage, 
+  storage: storage,
   fileFilter: fileFilter,
-  limits: { fileSize: 50 * 1024 * 1024 } // Increased to 50MB limit for videos
-});
+  limits: { fileSize: 50 * 1024 * 1024 } // 50MB max file size to accommodate videos
+}).fields([
+  { name: 'image', maxCount: 1 }, // Primary product image
+  { name: 'images', maxCount: 5 }, // Additional product images
+  { name: 'videos', maxCount: 2 } // Product videos
+]);
 
 /**
  * Get all products
@@ -162,44 +164,34 @@ exports.getProductsByStore = async (req, res, next) => {
 };
 
 /**
- * Create new product
+ * Create a new product
  * @route POST /api/products
  * @access Private (Vendor only)
+ * 
+ * Accepts multipart/form-data with:
+ * - image: Primary product image (single file)
+ * - images: Additional product images (up to 5)
+ * - videos: Product videos (up to 2)
+ * 
+ * Body parameters:
+ * - catalog_product_id: ID of the product from central catalog
+ * - price: Vendor selling price (MRP)
+ * - sale_price: Discounted price (optional)
+ * - quantity: Stock quantity
+ * - shipping_charges: Shipping charges in INR (optional, default: 0)
+ * - shipping_included: Whether shipping is included in price (optional, default: false)
+ * - status: Product status (optional, default: 'pending')
  */
 exports.createProduct = async (req, res, next) => {
   try {
     const {
-      name,
-      description,
-      content,
-      status,
-      sku,
-      order,
+      catalog_product_id, // New field to reference the selected product from ec_products
+      price, // MRP
+      sale_price, // Discounted price
       quantity,
-      allow_checkout_when_out_of_stock,
-      with_storehouse_management,
-      is_featured,
-      brand_id,
-      is_variation,
-      sale_type,
-      price,
-      sale_price,
-      start_date,
-      end_date,
-      length,
-      wide,
-      height,
-      weight,
-      tax_id,
-      stock_status,
-      // Additional fields
-      category,
-      sub_category,
-      videos,
-      purchase_price,
-      hsn_sac_code,
-      applicable_tax,
-      unit
+      shipping_charges, // Shipping charges in INR
+      shipping_included, // Whether shipping cost is included in price
+      status = 'pending' // Default status is pending
     } = req.body;
     
     // Get vendor ID from authenticated user
@@ -209,91 +201,166 @@ exports.createProduct = async (req, res, next) => {
     const store = await Store.findOne({ where: { customerId: vendorId } });
     
     if (!store) {
-      return res.status(404).json({
-        status: 'fail',
-        message: 'No store found for this vendor. Please create a store first.'
+      return next(new AppError('No store found for this vendor. Please create a store first.', 404));
+    }
+    
+    // Check if a catalog product ID was provided
+    if (!catalog_product_id) {
+      return next(new AppError('You must select a product from the catalog by providing catalog_product_id', 400));
+    }
+    
+    // Log the catalog_product_id for debugging
+    console.log(`Searching for catalog product with ID: ${catalog_product_id} (type: ${typeof catalog_product_id})`);
+    
+    // Ensure catalog_product_id is an integer
+    const productId = parseInt(catalog_product_id, 10);
+    
+    // Fetch product details from the catalog
+    let catalogProduct;
+    try {
+      // Include all the fields we need
+      console.log(`Attempting to find product with ID: ${productId}`);
+      catalogProduct = await Product.findByPk(productId, {
+        attributes: [
+          'id', 'name', 'description', 'content', 'status', 'images', 'sku',
+          'order', 'quantity', 'price', 'sale_price', 'weight',
+          'created_at', 'updated_at', 'image', 'category', 'sub_category',
+          'videos', 'unit', 'brand_id', 'sale_type', 'length', 'wide', 'height',
+           'tax_id', 'is_featured'
+        ]
       });
-    }
-    
-    // Use store.id as the store_id
-    const store_id = store.id;
-    
-    // Handle image upload if present
-    let image = null;
-    if (req.file) {
-      image = `/uploads/products/${req.file.filename}`;
-    }
-    
-    // Handle multiple images and videos if present
-    let images = [];
-    let videoUrls = []; // Renamed to avoid conflict with videos from req.body
-    
-    if (req.files) {
-      // When using multer.fields(), req.files is an object with fieldnames as keys
-      // Each key contains an array of files
       
-      // Handle images
-      if (req.files.images && req.files.images.length > 0) {
-        images = req.files.images.map(file => `/uploads/products/${file.filename}`);
-        images = JSON.stringify(images);
+      if (!catalogProduct) {
+        console.log('Product not found with findByPk, trying findOne...');
+        catalogProduct = await Product.findOne({
+          where: { id: productId },
+          attributes: safeAttributes
+        });
       }
       
-      // Handle videos
-      if (req.files.videos && req.files.videos.length > 0) {
-        videoUrls = req.files.videos.map(file => `/uploads/products/videos/${file.filename}`);
-        videos = JSON.stringify(videoUrls); // Use the parsed videoUrls but assign to videos parameter from req.body
+      if (!catalogProduct) {
+        // Log a few available products for debugging
+        const sampleProducts = await Product.findAll({ 
+          limit: 5, 
+          attributes: ['id', 'name']
+        });
+        console.log('Sample of available products:', JSON.stringify(sampleProducts));
+        
+        return next(new AppError(`Product with ID ${productId} not found in catalog`, 404));
       }
+      
+      console.log(`Found catalog product: ${catalogProduct.name} (ID: ${catalogProduct.id})`);
+    } catch (error) {
+      console.error('Error fetching catalog product:', error);
+      return next(new AppError(`Failed to find product in catalog: ${error.message}`, 500));
     }
     
-    // Create the product
-    const newProduct = await Product.create({
-      name,
-      description,
-      content,
-      status: status || 'pending',
-      images,
-      sku,
-      order,
-      quantity,
-      allow_checkout_when_out_of_stock,
-      with_storehouse_management,
-      is_featured,
-      brand_id,
-      is_variation,
-      sale_type,
-      price,
-      sale_price,
-      start_date,
-      end_date,
-      length,
-      wide,
-      height,
-      weight,
-      tax_id,
-      views: 0,
-      stock_status: stock_status || 'in_stock',
-      store_id,
-      created_by_id: vendorId, // Get directly from authenticated user
-      created_by_type: 'Botble\\Marketplace\\Models\\Store',
-      image,
-      // Add the new fields
-      category,
-      sub_category,
-      videos,
-      purchase_price,
-      hsn_sac_code,
-      applicable_tax,
-      unit,
+    // Basic validation
+    if (!price || !quantity) {
+      return next(new AppError('Price and quantity are required fields', 400));
+    }
+    
+    // Create the new product using catalog product details and vendor-specific information
+    // Now we can include all fields including shipping fields
+    const productData = {
+      name: catalogProduct.name,
+      description: catalogProduct.description,
+      content: catalogProduct.content,
+      catalog_product_id: catalogProduct.id, // Store reference to catalog product
+      price: parseFloat(price), // MRP
+      sale_price: sale_price ? parseFloat(sale_price) : null, // Discounted price
+      quantity: parseInt(quantity),
+      sku: catalogProduct.sku,
+      store_id: store.id,
+      status,
+      is_variation: false, // Not handling variations in this simplified flow
+      category: catalogProduct.category,
+      sub_category: catalogProduct.sub_category,
+      brand_id: catalogProduct.brand_id,
+      sale_type: catalogProduct.sale_type,
+      length: catalogProduct.length,
+      wide: catalogProduct.wide,
+      height: catalogProduct.height,
+      weight: catalogProduct.weight,
+      
+      tax_id: catalogProduct.tax_id,
+      is_featured: catalogProduct.is_featured || false,
+      unit: catalogProduct.unit,
+      // Now we can include shipping fields directly
+      shipping_charges: shipping_charges || 0,
+      shipping_included: shipping_included === 'true' || shipping_included === true ? true : false,
       created_at: new Date(),
       updated_at: new Date()
+    };
+    
+    console.log('Creating product with shipping info:', { 
+      shipping_charges: productData.shipping_charges, 
+      shipping_included: productData.shipping_included 
     });
     
-    res.status(201).json({
-      status: 'success',
-      data: {
-        product: newProduct
+    let newProduct;
+    
+    try {
+      console.log('Attempting to create product with data:', JSON.stringify(productData));
+      newProduct = await Product.create(productData);
+      console.log('Product created successfully with ID:', newProduct.id);
+      
+      // Handle file uploads
+      if (req.file) {
+        console.log('Processing primary image upload');
+        await Product.update(
+          { image: `/uploads/products/${req.file.filename}` },
+          { where: { id: newProduct.id } }
+        );
+        newProduct.image = `/uploads/products/${req.file.filename}`;
       }
-    });
+      
+      // Handle multiple files (images and videos) if present
+      if (req.files) {
+        // Handle images
+        if (req.files.images && req.files.images.length > 0) {
+          console.log(`Processing ${req.files.images.length} additional images`);
+          const images = req.files.images.map(file => `/uploads/products/${file.filename}`);
+          await Product.update(
+            { images: JSON.stringify(images) },
+            { where: { id: newProduct.id } }
+          );
+          newProduct.images = JSON.stringify(images);
+        }
+        
+        // Handle videos
+        if (req.files.videos && req.files.videos.length > 0) {
+          console.log(`Processing ${req.files.videos.length} videos`);
+          const videos = req.files.videos.map(file => `/uploads/products/${file.filename}`);
+          await Product.update(
+            { videos: JSON.stringify(videos) },
+            { where: { id: newProduct.id } }
+          );
+          newProduct.videos = JSON.stringify(videos);
+        }
+      }
+      
+      // Return success response
+      return res.status(201).json({
+        status: 'success',
+        message: 'Product created successfully from catalog',
+        data: {
+          product: newProduct,
+          catalog_source: {
+            id: catalogProduct.id,
+            name: catalogProduct.name,
+            brand: catalogProduct.brand
+          },
+          shipping_info: {
+            shipping_charges: newProduct.shipping_charges,
+            shipping_included: newProduct.shipping_included
+          } // Include shipping info from the saved product
+        }
+      });
+    } catch (error) {
+      console.error('Error during product creation process:', error);
+      return next(new AppError(`Failed to create product: ${error.message}`, 500));
+    }
   } catch (error) {
     next(error);
   }
@@ -323,9 +390,31 @@ exports.updateProduct = async (req, res, next) => {
       }
     });
     
-    // Handle image upload if present
-    if (req.file) {
-      product.image = `/uploads/products/${req.file.filename}`;
+    // Handle image uploads if present
+    const mediaFiles = [];
+    
+    if (req.files) {
+      // Handle main image
+      if (req.files.image && req.files.image.length > 0) {
+        product.image = `/uploads/products/${req.files.image[0].filename}`;
+      }
+      
+      // Handle additional images
+      if (req.files.images && req.files.images.length > 0) {
+        const imageUrls = req.files.images.map(file => `/uploads/products/${file.filename}`);
+        mediaFiles.push(...imageUrls.map(url => ({ type: 'image', url })));
+      }
+      
+      // Handle videos
+      if (req.files.videos && req.files.videos.length > 0) {
+        const videoUrls = req.files.videos.map(file => `/uploads/products/${file.filename}`);
+        mediaFiles.push(...videoUrls.map(url => ({ type: 'video', url })));
+      }
+      
+      // Store all media files
+      if (mediaFiles.length > 0) {
+        product.media_files = JSON.stringify(mediaFiles);
+      }
     }
     
     // Handle multiple files (images and videos) if present
