@@ -1,5 +1,5 @@
 const { Payment } = require('../models/Payment');
-const AppError = require('../utils/appError');
+const AppError = require('../utils/AppError');
 const revenueService = require('../services/revenueService');
 
 /**

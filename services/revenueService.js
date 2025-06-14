@@ -1,7 +1,7 @@
 const { Payment } = require('../models/Payment');
 const { sequelize } = require('../config/db');
 const { Op } = require('sequelize');
-// const AppError = require('../utils/appError');
+// const AppError = require('../utils/AppError');
 
 /**
  * Service to handle vendor revenue calculations and tracking

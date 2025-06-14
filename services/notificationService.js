@@ -92,13 +92,21 @@ exports.sendNotification = async (token, title, body, data = {}, preventDuplicat
       notificationTracker.markAsSent(type, entityId, action, token);
     }
 
+    // Convert all data values to strings as required by Firebase
+    const stringifiedData = {};
+    if (typeof data === 'object') {
+      Object.keys(data).forEach(key => {
+        stringifiedData[key] = data[key] !== null && data[key] !== undefined ? String(data[key]) : '';
+      });
+    }
+
     const message = {
       token,
       notification: {
         title,
         body
       },
-      data: typeof data === 'object' ? data : {}
+      data: stringifiedData
     };
 
     const response = await messaging.send(message);
@@ -264,13 +272,21 @@ exports.sendTopicNotification = async (topic, title, body, data = {}, preventDup
       notificationTracker.markAsSent(type, entityId, action, `topic:${topic}`);
     }
 
+    // Convert all data values to strings as required by Firebase
+    const stringifiedData = {};
+    if (typeof data === 'object') {
+      Object.keys(data).forEach(key => {
+        stringifiedData[key] = data[key] !== null && data[key] !== undefined ? String(data[key]) : '';
+      });
+    }
+
     const message = {
       topic,
       notification: {
         title,
         body
       },
-      data: typeof data === 'object' ? data : {}
+      data: stringifiedData
     };
 
     const response = await messaging.send(message);

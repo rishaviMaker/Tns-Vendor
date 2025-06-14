@@ -36,7 +36,7 @@ const authenticate = async (req, res, next) => {
     if (!vendor) {
       return res.status(401).json({ 
         status: 'fail', 
-        message: 'Vendor no longer exists' 
+        message: 'Vendor not found' 
       });
     }
 

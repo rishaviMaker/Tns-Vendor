@@ -79,6 +79,18 @@ const dashboardController = {
       const currentBalance = totalRevenue - totalWithdrawals - totalFees;
       
       // Get revenue data for last 30 days - for graph
+      console.log('Fetching revenue data for vendor ID:', vendorId);
+      console.log('Date range:', last30Days, 'to', new Date());
+      
+      // Check if there are any payments for this vendor
+      const paymentsCount = await Payment.count({
+        where: {
+          customer_id: vendorId
+        }
+      });
+      
+      console.log('Total payments for this vendor:', paymentsCount);
+      
       const dailyRevenue = await Payment.findAll({
         attributes: [
           [sequelize.fn('DATE', sequelize.col('created_at')), 'date'],
@@ -86,9 +98,8 @@ const dashboardController = {
         ],
         where: {
           customer_id: vendorId,
-          customer_type: 'vendor',
+          // Removed customer_type and payment_type filters which might be restrictive
           status: 'completed',
-          payment_type: 'revenue',
           created_at: {
             [Op.gte]: last30Days
           }
@@ -97,11 +108,37 @@ const dashboardController = {
         order: [[sequelize.fn('DATE', sequelize.col('created_at')), 'ASC']]
       });
       
-      // Process the data for the sales chart
-      const salesChartData = dailyRevenue.map(item => ({
-        date: item.get('date'),
-        revenue: parseFloat(item.get('revenue') || 0).toFixed(2)
+      console.log('Daily revenue results:', dailyRevenue.length);
+      
+      // Generate an array of all days in the last 30 days
+      const allDays = [];
+      for (let i = 0; i < 30; i++) {
+        const day = new Date(last30Days);
+        day.setDate(day.getDate() + i);
+        allDays.push({
+          date: day.toISOString().split('T')[0],  // Format as YYYY-MM-DD
+          revenue: '0.00'
+        });
+      }
+      
+      // Map the actual revenue data
+      const revenueMap = new Map();
+      dailyRevenue.forEach(item => {
+        const dateStr = item.get('date');
+        if (dateStr) {
+          // Format date consistently as YYYY-MM-DD
+          const formattedDate = new Date(dateStr).toISOString().split('T')[0];
+          revenueMap.set(formattedDate, parseFloat(item.get('revenue') || 0).toFixed(2));
+        }
+      });
+      
+      // Fill in the actual revenue values
+      const salesChartData = allDays.map(day => ({
+        date: day.date,
+        revenue: revenueMap.get(day.date) || '0.00'
       }));
+      
+      console.log('Final sales chart data points:', salesChartData.length);
       
       // Get payment data by status (for pie chart)
       const paymentsByStatus = await Payment.findAll({

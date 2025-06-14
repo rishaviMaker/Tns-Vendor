@@ -5,6 +5,14 @@ const { authenticate, authorize } = require('../middlewares/auth');
 
 const router = express.Router();
 
+// Notification routes
+const notificationController = require('../controllers/notificationController');
+router.get('/notifications', authenticate, notificationController.getNotifications);
+router.get('/notifications/count', authenticate, notificationController.getNotificationCount);
+router.patch('/notifications/mark-all-read', authenticate, notificationController.markAllAsRead);
+router.patch('/notifications/:id/read', authenticate, notificationController.markAsRead);
+router.delete('/notifications/:id', authenticate, notificationController.deleteNotification);
+
 // Public vendor routes
 router.get('/',  authenticate, vendorController.getAllVendors);
 router.get('/:id', vendorController.getVendor);

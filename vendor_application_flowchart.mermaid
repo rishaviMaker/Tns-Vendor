@@ -1,0 +1,269 @@
+graph TD
+    %% Client Side
+    subgraph "Client Applications"
+        MobileApp["Mobile App\n(Vendor Dashboard)"]
+        WebApp["Web Dashboard\n(Vendor Portal)"]
+    end
+
+    %% API Gateway
+    subgraph "API Layer"
+        APIGateway["Express.js API Gateway\n(app.js)"]
+        
+        %% Authentication
+        subgraph "Authentication"
+            Auth["Auth Middleware\n(auth.js)"]
+            JWT["JWT Verification"]
+            Session["Session Management"]
+        end
+        
+        %% Route Handlers
+        subgraph "Route Handlers"
+            VendorRoutes["Vendor Routes\n(vendorRoutes.js)"]
+            StoreRoutes["Store Routes\n(storeRoutes.js)"]
+            ProductRoutes["Product Routes\n(productRoutes.js)"]
+            OrderRoutes["Order Routes\n(orderRoutes.js)"]
+            DashboardRoutes["Dashboard Routes\n(dashboardRoutes.js)"]
+            DiscountRoutes["Coupon Routes\n(discountRoutes.js)"]
+            NotificationRoutes["Notification Routes"]
+            WithdrawalRoutes["Withdrawal Routes"]
+        end
+    end
+    
+    %% Controllers
+    subgraph "Controllers"
+        VendorController["Vendor Controller\n(vendorController.js)"]
+        StoreController["Store Controller"]
+        ProductController["Product Controller"]
+        OrderController["Order Controller"]
+        DashboardController["Dashboard Controller\n(dashboardController.js)"]
+        DiscountController["Discount Controller"]
+        NotificationController["Notification Controller"]
+        WithdrawalController["Withdrawal Controller"]
+    end
+    
+    %% Services 
+    subgraph "Business Services"
+        VendorService["Vendor Service"]
+        StoreService["Store Service"]
+        ProductService["Product Service"]
+        OrderService["Order Service"]
+        RevenueService["Revenue Service"]
+        DiscountService["Discount Service"]
+        NotificationService["Notification Service\n(eventNotificationService.js)"]
+        WithdrawalService["Withdrawal Service"]
+    end
+    
+    %% Data Models
+    subgraph "Data Models"
+        Vendor["Vendor Model"]
+        Store["Store Model"]
+        Product["Product Model"]
+        Order["Order Model"]
+        Payment["Payment Model"]
+        Discount["Discount Model"]
+        Notification["Notification Model"]
+        CustomerWithdrawal["Withdrawal Model"]
+        Review["Review Model"]
+    end
+    
+    %% External Services
+    subgraph "External Services"
+        FirebaseMessaging["Firebase Cloud Messaging"]
+        EmailService["Email Service"]
+        FileStorage["File Storage\n(Logos/Products/ID Proofs)"]
+        PaymentGateway["Payment Gateway"]
+    end
+    
+    %% Database
+    Database[("MySQL Database\n(Sequelize ORM)")]
+    
+    %% Flow Connections - Client to API
+    MobileApp --> APIGateway
+    WebApp --> APIGateway
+    
+    %% API Gateway to Routes
+    APIGateway --> Auth
+    Auth --> VendorRoutes
+    Auth --> StoreRoutes
+    Auth --> ProductRoutes
+    Auth --> OrderRoutes
+    Auth --> DashboardRoutes
+    Auth --> DiscountRoutes
+    Auth --> NotificationRoutes
+    Auth --> WithdrawalRoutes
+    
+    %% Routes to Controllers
+    VendorRoutes --> VendorController
+    StoreRoutes --> StoreController
+    ProductRoutes --> ProductController
+    OrderRoutes --> OrderController
+    DashboardRoutes --> DashboardController
+    DiscountRoutes --> DiscountController
+    NotificationRoutes --> NotificationController
+    WithdrawalRoutes --> WithdrawalController
+    
+    %% Controllers to Services
+    VendorController --> VendorService
+    StoreController --> StoreService
+    ProductController --> ProductService
+    OrderController --> OrderService
+    DashboardController --> RevenueService
+    DiscountController --> DiscountService
+    NotificationController --> NotificationService
+    WithdrawalController --> WithdrawalService
+    
+    %% Services to Models
+    VendorService --> Vendor
+    StoreService --> Store
+    ProductService --> Product
+    OrderService --> Order
+    RevenueService --> Payment
+    DiscountService --> Discount
+    NotificationService --> Notification
+    WithdrawalService --> CustomerWithdrawal
+    
+    %% Models to Database
+    Vendor --> Database
+    Store --> Database
+    Product --> Database
+    Order --> Database
+    Payment --> Database
+    Discount --> Database
+    Notification --> Database
+    CustomerWithdrawal --> Database
+    Review --> Database
+    
+    %% External Service Connections
+    NotificationService --> FirebaseMessaging
+    VendorService --> EmailService
+    ProductService --> FileStorage
+    OrderService --> PaymentGateway
+    
+    %% Authentication Flow
+    JWT --> Auth
+    Session --> Auth
+    
+    %% Dashboard Controller Data Flow
+    DashboardController --> Store
+    DashboardController --> Payment
+    DashboardController --> Order
+    DashboardController --> Discount
+    DashboardController --> CustomerWithdrawal
+    DashboardController --> Review
+    
+    %% Style definitions
+    classDef clientApp fill:#e6f3ff,stroke:#6cb2eb,stroke-width:2px;
+    classDef apiGateway fill:#f9f2f4,stroke:#c7254e,stroke-width:2px;
+    classDef route fill:#f5f5f5,stroke:#333333,stroke-width:1px;
+    classDef controller fill:#dff0d8,stroke:#3c763d,stroke-width:1px;
+    classDef service fill:#fcf8e3,stroke:#8a6d3b,stroke-width:1px;
+    classDef model fill:#d9edf7,stroke:#31708f,stroke-width:1px;
+    classDef external fill:#f2dede,stroke:#a94442,stroke-width:1px;
+    classDef database fill:#e8d5e7,stroke:#761c6d,stroke-width:3px;
+    
+    %% Apply styles
+    class MobileApp,WebApp clientApp;
+    class APIGateway apiGateway;
+    class VendorRoutes,StoreRoutes,ProductRoutes,OrderRoutes,DashboardRoutes,DiscountRoutes,NotificationRoutes,WithdrawalRoutes route;
+    class VendorController,StoreController,ProductController,OrderController,DashboardController,DiscountController,NotificationController,WithdrawalController controller;
+    class VendorService,StoreService,ProductService,OrderService,RevenueService,DiscountService,NotificationService,WithdrawalService service;
+    class Vendor,Store,Product,Order,Payment,Discount,Notification,CustomerWithdrawal,Review model;
+    class FirebaseMessaging,EmailService,FileStorage,PaymentGateway external;
+    class Database database;
+    
+    %% Authentication and Authorization Flow Highlight
+    subgraph "Authentication Flow"
+        direction TB
+        AuthRequest["Client Request with JWT Token"]
+        TokenExtract["Extract Token from Header"]
+        TokenVerify["Verify Token Signature"]
+        FindVendor["Find Vendor by ID"]
+        AttachUser["Attach User to Request"]
+        AuthSuccess["Authentication Success"]
+        AuthFailure["Authentication Failure"]
+        
+        AuthRequest --> TokenExtract
+        TokenExtract --> TokenVerify
+        TokenVerify --> FindVendor
+        FindVendor --> AttachUser
+        AttachUser --> AuthSuccess
+        
+        TokenExtract -- "No Token" --> AuthFailure
+        TokenVerify -- "Invalid Token" --> AuthFailure
+        FindVendor -- "Vendor Not Found" --> AuthFailure
+    end
+    
+    %% Notification System Flow
+    subgraph "Notification System"
+        direction TB
+        EventTrigger["Business Event Trigger"]
+        CreateNotification["Create Notification Record"]
+        StoreDatabaseRecord["Store in Database"]
+        SendFirebase["Send Firebase Push Notification"]
+        DeviceReceive["Device Receives Notification"]
+        
+        EventTrigger --> CreateNotification
+        CreateNotification --> StoreDatabaseRecord
+        CreateNotification --> SendFirebase
+        SendFirebase --> DeviceReceive
+    end
+    
+    %% Dashboard Data Flow
+    subgraph "Dashboard Data Flow"
+        direction TB
+        DashboardRequest["Dashboard Request"]
+        FetchRevenue["Fetch Revenue Data"]
+        FetchOrders["Fetch Orders Data"]
+        FetchReviews["Fetch Reviews"]
+        FetchCoupons["Fetch Coupons"]
+        GenerateSalesChart["Generate Sales Chart"]
+        CompileResponse["Compile Dashboard Response"]
+        
+        DashboardRequest --> FetchRevenue
+        DashboardRequest --> FetchOrders
+        DashboardRequest --> FetchReviews
+        DashboardRequest --> FetchCoupons
+        FetchRevenue --> GenerateSalesChart
+        FetchRevenue --> CompileResponse
+        FetchOrders --> CompileResponse
+        FetchReviews --> CompileResponse
+        FetchCoupons --> CompileResponse
+        GenerateSalesChart --> CompileResponse
+    end
+    
+    %% Order Processing Flow
+    subgraph "Order Processing Flow"
+        direction TB
+        OrderPlaced["Order Placed"]
+        OrderAccepted["Order Accepted by Vendor"]
+        OrderProcessing["Order Processing"]
+        OrderShipped["Order Shipped"]
+        OrderDelivered["Order Delivered"]
+        
+        OrderPlaced --> OrderAccepted
+        OrderAccepted --> OrderProcessing
+        OrderProcessing --> OrderShipped
+        OrderShipped --> OrderDelivered
+        
+        OrderStatusNotification["Send Status Notification"]
+        
+        OrderAccepted --> OrderStatusNotification
+        OrderProcessing --> OrderStatusNotification
+        OrderShipped --> OrderStatusNotification
+        OrderDelivered --> OrderStatusNotification
+    end
+    
+    %% Coupon Management Flow
+    subgraph "Coupon System"
+        direction TB
+        CreateCoupon["Create Coupon"]
+        ValidateCoupon["Validate Coupon Rules"]
+        StoreCoupon["Store Coupon in Database"]
+        ApplyCoupon["Apply to Order/Product"]
+        CalculateDiscount["Calculate Discount Amount"]
+        
+        CreateCoupon --> ValidateCoupon
+        ValidateCoupon --> StoreCoupon
+        StoreCoupon --> ApplyCoupon
+        ApplyCoupon --> CalculateDiscount
+    end

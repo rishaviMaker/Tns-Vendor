@@ -1,4 +1,5 @@
 const notificationService = require('./notificationService');
+const vendorNotificationService = require('./vendorNotificationService');
 const { Vendor } = require('../models/Vendor');
 const { Store } = require('../models/Store');
 
@@ -38,6 +39,20 @@ exports.notifyProductCreated = async (product, vendorId) => {
       vendorId: vendorId.toString(),
       timestamp: new Date().toISOString()
     };
+    
+    // Store notification in the database
+    await vendorNotificationService.createProductNotification(
+      vendorId,
+      title,
+      body,
+      product.id,
+      'created',
+      {
+        productName: product.name,
+        productImage: product.image,
+        timestamp: new Date().toISOString()
+      }
+    );
     
     // Send to topic subscribers (e.g., admins, interested users)
     await notificationService.sendTopicNotification(TOPICS.PRODUCT_UPDATES, title, body, data);
@@ -84,6 +99,20 @@ exports.notifyProductUpdated = async (product, vendorId, changedFields = []) => 
       timestamp: new Date().toISOString()
     };
     
+    // Store notification in the database
+    await vendorNotificationService.createProductNotification(
+      vendorId,
+      title,
+      body,
+      product.id,
+      'updated',
+      {
+        productName: product.name,
+        changedFields: JSON.stringify(changedFields),
+        timestamp: new Date().toISOString()
+      }
+    );
+    
     // Send to topic subscribers
     await notificationService.sendTopicNotification(TOPICS.PRODUCT_UPDATES, title, body, data);
     
@@ -119,6 +148,19 @@ exports.notifyProductDeleted = async (product, vendorId) => {
       vendorId: vendorId.toString(),
       timestamp: new Date().toISOString()
     };
+    
+    // Store notification in the database
+    await vendorNotificationService.createProductNotification(
+      vendorId,
+      title,
+      body,
+      product.id,
+      'deleted',
+      {
+        productName: product.name,
+        timestamp: new Date().toISOString()
+      }
+    );
     
     // Send to topic subscribers
     await notificationService.sendTopicNotification(TOPICS.PRODUCT_UPDATES, title, body, data);
@@ -174,6 +216,23 @@ exports.notifyVendorProfileUpdated = async (vendor, changedFields = []) => {
       timestamp: new Date().toISOString()
     };
     
+    // Store notification in the database
+    await vendorNotificationService.createNotification(
+      vendor.id,
+      title,
+      body,
+      {
+        type: 'vendor',
+        entityId: vendor.id,
+        entityType: 'vendor',
+        data: {
+          action: 'profile_updated',
+          changedFields: JSON.stringify(changedFields),
+          timestamp: new Date().toISOString()
+        }
+      }
+    );
+
     // Send to admin topic
     await notificationService.sendTopicNotification(TOPICS.ADMIN_ALERTS, 
       'Vendor Profile Update', 
@@ -222,6 +281,24 @@ exports.notifyStoreUpdated = async (store, vendorId, changedFields = []) => {
       timestamp: new Date().toISOString()
     };
     
+    // Store notification in the database
+    await vendorNotificationService.createNotification(
+      vendorId,
+      title,
+      body,
+      {
+        type: 'store',
+        entityId: store.id,
+        entityType: 'store',
+        data: {
+          action: 'updated',
+          storeName: store.name,
+          changedFields: JSON.stringify(changedFields),
+          timestamp: new Date().toISOString()
+        }
+      }
+    );
+
     // Send to store updates topic
     await notificationService.sendTopicNotification(TOPICS.STORE_UPDATES, title, body, data);
     
@@ -260,6 +337,24 @@ exports.notifyNewVendorRegistration = async (vendor, store) => {
       timestamp: new Date().toISOString()
     };
     
+    // Store notification in the database
+    await vendorNotificationService.createNotification(
+      vendor.id,
+      adminTitle,
+      adminBody,
+      {
+        type: 'vendor',
+        entityId: vendor.id,
+        entityType: 'vendor',
+        data: {
+          action: 'registered',
+          storeId: store ? store.id : null,
+          storeName: store ? store.name : null,
+          timestamp: new Date().toISOString()
+        }
+      }
+    );
+
     // Send to admin topic
     await notificationService.sendTopicNotification(TOPICS.ADMIN_ALERTS, adminTitle, adminBody, data);
     
@@ -267,6 +362,24 @@ exports.notifyNewVendorRegistration = async (vendor, store) => {
     const vendorTitle = 'Welcome to Vendor Platform';
     const vendorBody = `Thank you for registering, ${vendor.fullName || 'Vendor'}! Your account is now being reviewed.`;
     
+    // Store welcome notification in database
+    await vendorNotificationService.createNotification(
+      vendor.id,
+      vendorTitle,
+      vendorBody,
+      {
+        type: 'vendor',
+        entityId: vendor.id,
+        entityType: 'vendor',
+        data: {
+          action: 'welcome',
+          storeId: store ? store.id : null,
+          storeName: store ? store.name : null,
+          timestamp: new Date().toISOString()
+        }
+      }
+    );
+
     // If vendor has a device token, send direct notification
     if (vendor.deviceToken) {
       await notificationService.sendNotification(vendor.deviceToken, vendorTitle, vendorBody, {
@@ -314,12 +427,30 @@ exports.notifyVendorStatusChanged = async (vendor, oldStatus, newStatus) => {
       timestamp: new Date().toISOString()
     };
     
+    // Store notification in the database
+    await vendorNotificationService.createNotification(
+      vendor.id,
+      title,
+      body,
+      {
+        type: 'vendor',
+        entityId: vendor.id,
+        entityType: 'vendor',
+        data: {
+          action: 'status_changed',
+          oldStatus,
+          newStatus,
+          timestamp: new Date().toISOString()
+        }
+      }
+    );
+
     // Send to vendor's specific topic
     const vendorTopic = `vendor_${vendor.id}`;
     await notificationService.sendTopicNotification(vendorTopic, title, body, data);
     
     // If vendor has a device token, send direct notification
-    if (vendor.deviceToken) {
+    if (vendor && vendor.deviceToken) {
       await notificationService.sendNotification(vendor.deviceToken, title, body, data);
     }
     
@@ -362,6 +493,20 @@ exports.notifyOrderStatusChanged = async (order, oldStatus, newStatus, vendorId)
       timestamp: new Date().toISOString()
     };
     
+    // Store notification in the database
+    await vendorNotificationService.createOrderNotification(
+      vendorId,
+      title,
+      body,
+      order.id,
+      newStatus,
+      {
+        oldStatus,
+        orderNumber: order.orderNumber || order.id,
+        timestamp: new Date().toISOString()
+      }
+    );
+
     // Send to vendor's specific topic
     const vendorTopic = `vendor_${vendorId}`;
     await notificationService.sendTopicNotification(vendorTopic, title, body, data);
@@ -383,67 +528,6 @@ exports.notifyOrderStatusChanged = async (order, oldStatus, newStatus, vendorId)
 };
 
 /**
- * Subscribe a device to relevant topics based on user role
- * @param {string} token - Device token
- * @param {string} role - User role (vendor, admin, customer)
- * @param {number} userId - User ID
- */
-exports.subscribeDeviceToTopics = async (token, role, userId) => {
-  try {
-    if (!token) {
-      console.error('Device token is missing');
-      return;
-    }
-    
-    // Subscribe to general topics
-    await notificationService.subscribeToTopic(token, TOPICS.ALL_USERS);
-    
-    // Role-specific subscriptions
-    if (role === 'vendor') {
-      await notificationService.subscribeToTopic(token, TOPICS.ALL_VENDORS);
-      await notificationService.subscribeToTopic(token, `vendor_${userId}`);
-    } else if (role === 'admin') {
-      await notificationService.subscribeToTopic(token, TOPICS.ADMIN_ALERTS);
-      await notificationService.subscribeToTopic(token, TOPICS.VENDOR_UPDATES);
-      await notificationService.subscribeToTopic(token, TOPICS.STORE_UPDATES);
-      await notificationService.subscribeToTopic(token, TOPICS.PRODUCT_UPDATES);
-    }
-    
-    console.log(`Device successfully subscribed to topics for ${role}`);
-  } catch (error) {
-    console.error('Error subscribing device to topics:', error);
-  }
-};
-
-/**
- * Update device token for a vendor
- * @param {number} vendorId - Vendor ID
- * @param {string} deviceToken - New device token
- */
-exports.updateVendorDeviceToken = async (vendorId, deviceToken) => {
-  try {
-    const vendor = await Vendor.findByPk(vendorId);
-    
-    if (!vendor) {
-      console.error(`Vendor with ID ${vendorId} not found`);
-      return false;
-    }
-    
-    // Update the vendor's device token
-    vendor.deviceToken = deviceToken;
-    await vendor.save();
-    
-    // Subscribe to relevant topics
-    await this.subscribeDeviceToTopics(deviceToken, 'vendor', vendorId);
-    
-    return true;
-  } catch (error) {
-    console.error('Error updating vendor device token:', error);
-    return false;
-  }
-};
-
-/**
  * Send notification about withdrawal status change
  * @param {Object} withdrawal - The withdrawal that was updated
  * @param {string} oldStatus - Previous status
@@ -454,20 +538,33 @@ exports.updateVendorDeviceToken = async (vendorId, deviceToken) => {
 exports.notifyWithdrawalStatusChanged = async (withdrawal, oldStatus, newStatus, vendorId, additionalInfo = {}) => {
   try {
     // Get vendor details
+    console.log('Sending withdrawal status change notification...',newStatus, oldStatus, withdrawal);
     const vendor = await Vendor.findByPk(vendorId);
     const vendorName = vendor ? vendor.fullName || vendor.businessName || 'A vendor' : 'A vendor';
     
     // Format amount with currency
-    const formattedAmount = new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD' // You may want to use the actual currency from the withdrawal if available
-    }).format(withdrawal.amount);
+    let formattedAmount;
+    try {
+      formattedAmount = new Intl.NumberFormat('en-IN', {
+        style: 'currency',
+        currency: 'INR' // You may want to use the actual currency from the withdrawal if available
+      }).format(withdrawal.amount);
+    } catch (err) {
+      // Fallback formatting if locale is not supported
+      formattedAmount = `₹${parseFloat(withdrawal.amount).toFixed(2)}`;
+      console.log('Using fallback currency formatting:', formattedAmount);
+    }
+
+    console.log('Formatted amount:', formattedAmount);
     
     // Create appropriate message based on status
     let statusMessage = '';
     switch (newStatus) {
       case 'approved':
         statusMessage = `Your withdrawal request for ${formattedAmount} has been approved.`;
+        break;
+         case 'pending':
+        statusMessage = `Your withdrawal request for ${formattedAmount} has been created.`;
         break;
       case 'processing':
         statusMessage = `Your withdrawal request for ${formattedAmount} is now being processed.`;
@@ -501,6 +598,21 @@ exports.notifyWithdrawalStatusChanged = async (withdrawal, oldStatus, newStatus,
       ...additionalInfo
     };
     
+    // Store notification in the database
+    await vendorNotificationService.createWithdrawalNotification(
+      vendorId,
+      title,
+      body,
+      withdrawal.id,
+      newStatus,
+      {
+        amount: withdrawal.amount,
+        paymentChannel: withdrawal.payment_channel,
+        oldStatus: oldStatus,
+        ...additionalInfo
+      }
+    );
+
     // Send to vendor's device if they have a token
     if (vendor && vendor.deviceToken) {
       await notificationService.sendNotification(vendor.deviceToken, title, body, data);

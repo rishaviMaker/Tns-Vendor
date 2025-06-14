@@ -159,7 +159,7 @@ exports.createWithdrawal = async (req, res, next) => {
     if (!validation.isValid) {
       return next(new AppError(
         `Insufficient funds. Available balance: ₹${validation.available.toFixed(2)}, ` +
-        `requested: ₹${validation.requested.toFixed(2)}, ` +
+        `requested: ₹${Number(validation.requested).toFixed(2)}, ` +
         `shortfall: ₹${validation.shortfall.toFixed(2)}`,
         400
       ));

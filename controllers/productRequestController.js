@@ -1,7 +1,7 @@
 const { ProductRequest } = require('../models/ProductRequest');
 const { Vendor } = require('../models/Vendor');
 const { Store } = require('../models/Store');
-const AppError = require('../utils/appError');
+const AppError = require('../utils/AppError');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
