@@ -20,7 +20,7 @@ const dashboardController = {
       console.log(vendorId);
       // Find the store associated with this vendor
       const store = await Store.findOne({
-        where: { customerId: vendorId },
+        where: { customer_id: vendorId },
         attributes: ['id', 'name']
       });
 

@@ -112,7 +112,7 @@ exports.getVendor = catchAsync(async (req, res, next) => {
       return next(new AppError('Vendor not found', 404));
     }
     
-    const store = await Store.findOne({ where: { customerId: id } });
+    const store = await Store.findOne({ where: { customer_id: id } });
 
     res.status(200).json({
       status: 'success',
@@ -314,7 +314,7 @@ exports.updateVendorProfile = catchAsync(async (req, res, next) => {
     const storeChangedFields = [];
     
     if (vendor.id) {
-      store = await Store.findOne({ where: { customerId: vendor.id } });
+      store = await Store.findOne({ where: { customer_id: vendor.id } });
       if (store) {
         // Update store information and track changes
         if (companyName && store.name !== companyName) {
@@ -451,7 +451,7 @@ exports.updateVendorProfile = catchAsync(async (req, res, next) => {
       status: 'success',
       data: {
         vendor: vendorResponse,
-        store: vendor.id ? await Store.findOne({ where: { customerId: vendor.id } }) : null
+        store: vendor.id ? await Store.findOne({ where: { customer_id: vendor.id } }) : null
       }
     });
 });
@@ -494,7 +494,7 @@ exports.uploadLogo = catchAsync(async (req, res, next) => {
     await vendor.save();
     
     // Also update the store logo if this vendor has a store
-    const store = await Store.findOne({ where: { customerId: id } });
+    const store = await Store.findOne({ where: { customer_id: id } });
     if (store) {
       store.logo = logoUrl;
       await store.save();
@@ -534,7 +534,7 @@ exports.getVendorDashboard = catchAsync(async (req, res, next) => {
     }
     
     // Get associated store data if exists
-    const store = await Store.findOne({ where: { customerId: vendor.id } });
+    const store = await Store.findOne({ where: { customer_id: vendor.id } });
     
     // Exclude password from response
     const vendorResponse = vendor.toJSON();
@@ -714,7 +714,7 @@ exports.registerVendor = catchAsync(async (req, res, next) => {
     // Create a new store associated with this vendor
     const store = await Store.create({
       name: companyName,
-      customerId: newVendor.id,
+      customer_id: newVendor.id,
       phone: shopPhoneNumber || mobileNumber,
       address: street,
       city,
@@ -997,7 +997,7 @@ exports.loginVendor = catchAsync(async (req, res, next) => {
     }
 
     // Get associated store data if exists
-    const store = await Store.findOne({ where: { customerId: vendor.id } });
+    const store = await Store.findOne({ where: { customer_id: vendor.id } });
 
     // Remove password from response
     const vendorResponse = { ...vendor.toJSON() };
@@ -1050,7 +1050,7 @@ exports.uploadIdProof = catchAsync(async (req, res, next) => {
     }
     
     // Get associated store data
-    const store = await Store.findOne({ where: { customerId: id } });
+    const store = await Store.findOne({ where: { customer_id: id } });
     
     // Update vendor with ID proof URL
     vendor.idProofUrl = `/uploads/id_proofs/${req.file.filename}`;

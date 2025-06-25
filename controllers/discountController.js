@@ -14,7 +14,7 @@ exports.getCoupons = async (req, res, next) => {
     
     // Find the store associated with this vendor
     const store = await Store.findOne({
-      where: { customerId: vendorId }
+      where: { customer_id: vendorId }
     });
 
     if (!store) {
@@ -55,7 +55,7 @@ exports.getCouponById = async (req, res, next) => {
     
     // Find the store associated with this vendor
     const store = await Store.findOne({
-      where: { customerId: vendorId }
+      where: { customer_id: vendorId }
     });
 
     if (!store) {
@@ -149,7 +149,7 @@ exports.createCoupon = async (req, res, next) => {
     
     // Find the store associated with this vendor
     const store = await Store.findOne({
-      where: { customerId: vendorId }
+      where: { customer_id: vendorId }
     });
 
     if (!store) {
@@ -312,7 +312,7 @@ exports.updateCoupon = async (req, res, next) => {
     
     // Find the store associated with this vendor
     const store = await Store.findOne({
-      where: { customerId: vendorId }
+      where: { customer_id: vendorId }
     });
 
     if (!store) {
@@ -506,7 +506,7 @@ exports.deleteCoupon = async (req, res, next) => {
     
     // Find the store associated with this vendor
     const store = await Store.findOne({
-      where: { customerId: vendorId }
+      where: { customer_id: vendorId }
     });
 
     if (!store) {

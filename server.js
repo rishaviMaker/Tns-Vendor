@@ -5,7 +5,7 @@ const { initDatabase } = require('./utils/database');
 // Load environment variables
 dotenv.config();
 
-const PORT = process.env.PORT || 5000; // Changed to port 5000 to avoid conflict
+const PORT = process.env.PORT || 6000; // Set default port to 6000 to match Swagger configuration
 
 // Initialize the database
 const startServer = async () => {

@@ -3,6 +3,8 @@ const cors = require('cors');
 const morgan = require('morgan');
 const helmet = require('helmet');
 const dotenv = require('dotenv');
+const swaggerUi = require('swagger-ui-express');
+const swaggerSpec = require('./swagger/config');
 
 // Load environment variables
 dotenv.config();
@@ -27,8 +29,18 @@ const errorHandler = require('./middlewares/errorHandler');
 const app = express();
 
 // Middlewares
-app.use(helmet()); // Security headers
-app.use(cors()); // Enable CORS
+app.use(helmet({ 
+  contentSecurityPolicy: false, // Disable CSP as it can interfere with Swagger UI
+  crossOriginEmbedderPolicy: false // Allow loading resources from different origins
+})); // Security headers with modifications for Swagger
+
+// Enhanced CORS configuration
+app.use(cors({
+  origin: '*', // Allow all origins
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
 app.use(morgan('dev')); // Request logging
 app.use(express.json()); // Parse JSON request body
 app.use(express.urlencoded({ extended: true })); // Parse URL-encoded request body
@@ -45,6 +57,37 @@ app.use('/api/revenue', revenueRoutes);
 app.use('/api/product-search', productSearchRoutes);
 app.use('/api/product-requests', productRequestRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+
+// Mount static files if needed for Swagger UI
+app.use('/public', express.static('public'));
+
+// Serve the Swagger spec directly as a route
+app.get('/swagger.json', (req, res) => {
+  res.setHeader('Content-Type', 'application/json');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.send(swaggerSpec);
+});
+
+// Create a single middleware function for swagger documentation
+const swaggerUiOptions = {
+  explorer: true,
+  swaggerOptions: {
+    persistAuthorization: true,
+    docExpansion: 'list',
+    filter: true,
+    // By not specifying a URL, we'll use the directly provided spec
+  },
+  customCss: '.swagger-ui .topbar { display: none }',
+  customSiteTitle: 'Vendor API Documentation'
+};
+
+// Setup Swagger UI - we directly pass the spec rather than relying on URL fetch
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, swaggerUiOptions));
+
+// Direct root to documentation
+app.get('/docs', (req, res) => {
+  res.redirect('/api-docs');
+});
 
 // Health check route
 app.get('/health', (req, res) => {

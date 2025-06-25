@@ -113,7 +113,7 @@ const Store = sequelize.define('Store', {
     type: DataTypes.STRING,
     allowNull: true
   },
-  customerId: {
+  customer_id: {
     type: DataTypes.INTEGER,
     allowNull: false,
     references: {

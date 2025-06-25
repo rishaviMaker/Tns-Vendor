@@ -71,7 +71,7 @@ console.log(req.body);
 
         // Validate store belongs to vendor
         // const store = await Store.findOne({ 
-        //   where: { id: store_id, customerId: req.user.id }
+        //   where: { id: store_id, customer_id: req.user.id }
         // });
 
         // if (!store) {

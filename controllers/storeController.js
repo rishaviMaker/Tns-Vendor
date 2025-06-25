@@ -69,8 +69,8 @@ exports.getStoreByVendorId = async (req, res, next) => {
       });
     }
     
-    // Find store by customerId (vendor ID)
-    const store = await Store.findOne({ where: { customerId: vendorId } });
+    // Find store by customer_id (vendor ID)
+    const store = await Store.findOne({ where: { customer_id: vendorId } });
     
     if (!store) {
       return res.status(404).json({
@@ -233,7 +233,7 @@ exports.verifyVendor = async (req, res, next) => {
     await store.save();
     
     // Also update the vendor's verification status if needed
-    const vendor = await Vendor.findByPk(store.customerId);
+    const vendor = await Vendor.findByPk(store.customer_id);
     if (vendor && !vendor.isVerified) {
       vendor.isVerified = true;
       await vendor.save();

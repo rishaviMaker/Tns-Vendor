@@ -57,7 +57,7 @@ exports.getAllProducts = async (req, res, next) => {
     const vendorId = req.user.id;
     
     // Find store associated with this vendor
-    const store = await Store.findOne({ where: { customerId: vendorId } });
+    const store = await Store.findOne({ where: { customer_id: vendorId } });
     
     if (!store) {
       return res.status(404).json({
@@ -198,7 +198,7 @@ exports.createProduct = async (req, res, next) => {
     const vendorId = req.user.id;
     
     // Find store associated with this vendor
-    const store = await Store.findOne({ where: { customerId: vendorId } });
+    const store = await Store.findOne({ where: { customer_id: vendorId } });
     
     if (!store) {
       return next(new AppError('No store found for this vendor. Please create a store first.', 404));
