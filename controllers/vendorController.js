@@ -1075,7 +1075,6 @@ exports.loginVendor = async (req, res, next) => {
     next(error);
   }
 };
-
 /**
  * Upload ID Proof for Vendor
  * @route POST /api/vendors/upload-id-proof/:id
