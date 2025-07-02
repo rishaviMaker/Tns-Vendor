@@ -82,7 +82,8 @@ exports.logoUpload = multer({
  * Get all vendors
  * @route GET /api/vendors
  */
-exports.getAllVendors = catchAsync(async (req, res, next) => {
+exports.getAllVendors = async (req, res, next) => {
+  try {
     const vendors = await Vendor.findAll({
       // where: { status: 'active' },
       attributes: { exclude: ['password'] }
@@ -95,13 +96,18 @@ exports.getAllVendors = catchAsync(async (req, res, next) => {
         vendors
       }
     });
-});
+  } catch (error) {
+    console.error('Error in getAllVendors:', error);
+    next(error);
+  }
+};
 
 /**
  * Get vendor by ID
  * @route GET /api/vendors/:id
  */
-exports.getVendor = catchAsync(async (req, res, next) => {
+exports.getVendor = async (req, res, next) => {
+  try {
     const { id } = req.params;
 
     const vendor = await Vendor.findByPk(id, {
@@ -121,14 +127,19 @@ exports.getVendor = catchAsync(async (req, res, next) => {
         store: store || null
       }
     });
-});
+  } catch (error) {
+    console.error('Error in getVendor:', error);
+    next(error);
+  }
+};
 
 /**
  * Update vendor profile
  * @route PATCH /api/vendors/profile/:id
  * @access Private (Vendor only)
  */
-exports.updateVendorProfile = catchAsync(async (req, res, next) => {
+exports.updateVendorProfile = async (req, res, next) => {
+  try {
     const { id } = req.params;
     
     const vendor = await Vendor.findByPk(id);
@@ -454,7 +465,11 @@ exports.updateVendorProfile = catchAsync(async (req, res, next) => {
         store: vendor.id ? await Store.findOne({ where: { customer_id: vendor.id } }) : null
       }
     });
-});
+  } catch (error) {
+    console.error('Error in updateVendorProfile:', error);
+    next(error);
+  }
+};
 
 /**
  * Upload vendor logo
@@ -462,7 +477,8 @@ exports.updateVendorProfile = catchAsync(async (req, res, next) => {
  * @access Private (Vendor only)
  * @note This endpoint uses file upload middleware to handle logo uploads
  */
-exports.uploadLogo = catchAsync(async (req, res, next) => {
+exports.uploadLogo = async (req, res, next) => {
+  try {
     const { id } = req.params;
 
     const vendor = await Vendor.findByPk(id);
@@ -512,14 +528,19 @@ exports.uploadLogo = catchAsync(async (req, res, next) => {
         store: store || null
       }
     });
-});
+  } catch (error) {
+    console.error('Error in uploadLogo:', error);
+    next(error);
+  }
+};
 
 /**
  * Get vendor dashboard statistics
  * @route GET /api/vendors/dashboard/:id
  * @access Private (Vendor only)
  */
-exports.getVendorDashboard = catchAsync(async (req, res, next) => {
+exports.getVendorDashboard = async (req, res, next) => {
+  try {
     const { id } = req.params;
     
     const vendor = await Vendor.findByPk(id);
@@ -553,14 +574,19 @@ exports.getVendorDashboard = catchAsync(async (req, res, next) => {
         }
       }
     });
-});
+  } catch (error) {
+    console.error('Error in getVendorDashboard:', error);
+    next(error);
+  }
+};
 
 /**
  * Register a new vendor - First step (without OTP verification)
  * @route POST /api/vendors/register
  * @access Public
  */
-exports.registerVendor = catchAsync(async (req, res, next) => {
+exports.registerVendor = async (req, res, next) => {
+  try {
   const {
     fullName,
     email,
@@ -778,14 +804,19 @@ exports.registerVendor = catchAsync(async (req, res, next) => {
         store: store
       }
     });
-});
+  } catch (error) {
+    console.error('Error in registerVendor:', error);
+    next(error);
+  }
+};
 
 /**
  * Send OTP for mobile verification
  * @route POST /api/vendors/send-otp
  * @access Public
  */
-exports.sendOTP = catchAsync(async (req, res, next) => {
+exports.sendOTP = async (req, res, next) => {
+  try {
     const { mobileNumber, deviceToken } = req.body;
 
     if (!mobileNumber) {
@@ -822,7 +853,11 @@ exports.sendOTP = catchAsync(async (req, res, next) => {
       otp: otpRecord.otp,
       message: otpSent ? 'OTP sent successfully' : 'There was an issue sending OTP'
     });
-});
+  } catch (error) {
+    console.error('Error in sendOTP:', error);
+    next(error);
+  }
+};
 
 /**
  * Verify OTP and update vendor's mobile verification status
@@ -834,7 +869,8 @@ exports.sendOTP = catchAsync(async (req, res, next) => {
  * @route PATCH /api/vendors/device-token
  * @access Private (Vendor only)
  */
-exports.updateDeviceToken = catchAsync(async (req, res, next) => {
+exports.updateDeviceToken = async (req, res, next) => {
+  try {
     const { deviceToken, notificationsEnabled } = req.body;
     const vendorId = req.user.id;
     
@@ -878,9 +914,14 @@ exports.updateDeviceToken = catchAsync(async (req, res, next) => {
         vendor: vendorResponse
       }
     });
-});
+  } catch (error) {
+    console.error('Error in updateDeviceToken:', error);  
+    next(error);
+  }
+};
 
-exports.verifyOTP = catchAsync(async (req, res, next) => {
+exports.verifyOTP = async (req, res, next) => {
+  try {
     const { mobileNumber, otp, vendorId, deviceToken } = req.body;
 
     if (!mobileNumber) {
@@ -941,14 +982,19 @@ exports.verifyOTP = catchAsync(async (req, res, next) => {
       status: 'success',
       message: 'OTP verified successfully'
     });
-});
+  } catch (error) {
+    console.error('Error in verifyOTP:', error);
+    next(error);
+  }
+};
 
 /**
  * Login vendor
  * @route POST /api/vendors/login
  * @access Public
  */
-exports.loginVendor = catchAsync(async (req, res, next) => {
+exports.loginVendor = async (req, res, next) => {
+  try {
     const { email, password, deviceToken } = req.body;
     
     // Validate required fields
@@ -1024,14 +1070,19 @@ exports.loginVendor = catchAsync(async (req, res, next) => {
         store: store || null
       }
     });
-});
+  } catch (error) {
+    console.error('Error in loginVendor:', error);
+    next(error);
+  }
+};
 
 /**
  * Upload ID Proof for Vendor
  * @route POST /api/vendors/upload-id-proof/:id
  * @access Private
  */
-exports.uploadIdProof = catchAsync(async (req, res, next) => {
+exports.uploadIdProof = async (req, res, next) => {
+  try {
     const { id } = req.params;
 
     if (!req.file) {
@@ -1068,4 +1119,8 @@ exports.uploadIdProof = catchAsync(async (req, res, next) => {
         store: store || null
       }
     });
-});
+  } catch (error) {
+    console.error('Error in uploadIdProof:', error);
+    next(error);
+  }
+};
