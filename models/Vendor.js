@@ -119,6 +119,37 @@ const Vendor = sequelize.define('Vendor', {
     type: DataTypes.BOOLEAN,
     defaultValue: true,
     comment: 'Whether the vendor has enabled push notifications'
+  },
+  // KYC Verification Status Fields
+  isPanVerified: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false,
+    comment: 'PAN card verification status'
+  },
+  isAadharVerified: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false,
+    comment: 'Aadhar card verification status'
+  },
+  isDlVerified: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false,
+    comment: 'Driving License verification status'
+  },
+  isGstinVerified: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false,
+    comment: 'GSTIN verification status'
+  },
+  kycVerificationData: {
+    type: DataTypes.JSON,
+    allowNull: true,
+    comment: 'Stores detailed verification responses from Cashfree API'
+  },
+  kycVerifiedAt: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    comment: 'When the KYC verification was last performed'
   }
 }, {
   timestamps: true

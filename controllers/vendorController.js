@@ -3,6 +3,7 @@ const { OTP } = require('../models/OTP');
 const { Store } = require('../models/Store');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
+const cashfreeService = require('../services/cashfreeService');
 const otpService = require('../services/otpService');
 const notificationService = require('../services/notificationService');
 const multer = require('multer');
@@ -587,35 +588,36 @@ exports.getVendorDashboard = async (req, res, next) => {
  */
 exports.registerVendor = async (req, res, next) => {
   try {
-  const {
-    fullName,
-    email,
-    password,
-    confirmPassword,
-    businessType,
-    mobileNumber,
-    alternativeMobileNumber,
-    position,
-    idProofType,
-    idProofNumber,
-    companyName,
-    shopUrl,
-    gstinNumber,
-    panNumber,
-    establishedYear,
-    shopPhoneNumber,
-    street,
-    city,
-    state,
-    postalCode,
-    country,
-    deviceToken
-  } = req.body;
+    const {
+      fullName,
+      email,
+      password,
+      confirmPassword,
+      businessType,
+      mobileNumber,
+      alternativeMobileNumber,
+      position,
+      idProofType,
+      idProofNumber,
+      companyName,
+      shopUrl,
+      gstinNumber,
+      panNumber,
+      establishedYear,
+      shopPhoneNumber,
+      street,
+      city,
+      state,
+      postalCode,
+      country,
+      deviceToken,
+      dob // Date of birth for DL verification
+    } = req.body;
 
-  // Validate required fields
-  if (!fullName) {
-    return next(new AppError('Full name is required', 400));
-  }
+    // Validate required fields
+    if (!fullName) {
+      return next(new AppError('Full name is required', 400));
+    }
   
   if (!email) {
     return next(new AppError('Email is required', 400));
@@ -690,9 +692,67 @@ exports.registerVendor = async (req, res, next) => {
     }
     
     // Validate ID proof type
-    // if (idProofType && !['Aadhar Card', 'PAN Card', 'Driving License', 'Voter ID'].includes(idProofType)) {
-    //   return next(new AppError('Invalid ID proof type. Must be one of: Aadhar Card, PAN Card, Driving License, Voter ID', 400));
-    // }
+    if (idProofType && !['Aadhar Card', 'PAN Card', 'Driving License', 'Voter ID'].includes(idProofType)) {
+      return next(new AppError('Invalid ID proof type. Must be one of: Aadhar Card, PAN Card, Driving License, Voter ID', 400));
+    }
+    
+    // Perform KYC verification based on the provided documents
+    let kycVerificationData = {};
+    let isPanVerified = false;
+    let isAadharVerified = false;
+    let isDlVerified = false;
+    let isGstinVerified = false;
+    
+    try {
+      // Verify PAN if provided
+      if (panNumber) {
+        const panVerification = await cashfreeService.verifyPAN(panNumber, fullName);
+        isPanVerified = panVerification.verified;
+        kycVerificationData.pan = panVerification;
+        
+        // If PAN verification fails, we'll still create the account but mark it unverified
+        if (!isPanVerified) {
+          console.log(`PAN verification failed for ${panNumber}:`, panVerification.message);
+        }
+      }
+      
+      // Verify Aadhaar if that's the ID proof type
+      if (idProofType === 'Aadhar Card' && idProofNumber) {
+        const aadharVerification = await cashfreeService.verifyAadhaar(idProofNumber, fullName);
+        isAadharVerified = aadharVerification.verified;
+        kycVerificationData.aadhar = aadharVerification;
+        
+        if (!isAadharVerified) {
+          console.log(`Aadhaar verification failed for ${idProofNumber}:`, aadharVerification.message);
+        }
+      }
+      
+      // Verify Driving License if that's the ID proof type
+      if (idProofType === 'Driving License' && idProofNumber) {
+        const dlVerification = await cashfreeService.verifyDL(idProofNumber, dob);
+        isDlVerified = dlVerification.verified;
+        kycVerificationData.dl = dlVerification;
+        
+        if (!isDlVerified) {
+          console.log(`DL verification failed for ${idProofNumber}:`, dlVerification.message);
+        }
+      }
+      
+      // Verify GSTIN if provided
+      if (gstinNumber) {
+        const gstinVerification = await cashfreeService.verifyGSTIN(gstinNumber);
+        isGstinVerified = gstinVerification.verified;
+        kycVerificationData.gstin = gstinVerification;
+        
+        if (!isGstinVerified) {
+          console.log(`GSTIN verification failed for ${gstinNumber}:`, gstinVerification.message);
+        }
+      }
+    } catch (error) {
+      console.error('Error during KYC verification:', error);
+      // We'll continue with registration even if verification fails
+      // The message in the response will indicate there was an issue
+    }
 
     // Hash password
     const salt = await bcrypt.genSalt(10);
@@ -701,7 +761,7 @@ exports.registerVendor = async (req, res, next) => {
     // Get ID proof URL from request file if it exists
     const idProofUrl = req.file ? `/uploads/id_proofs/${req.file.filename}` : null;
 
-    // Create new vendor with pending status
+    // Create new vendor with pending status and KYC verification status
     const newVendor = await Vendor.create({
       fullName,
       email,
@@ -725,7 +785,14 @@ exports.registerVendor = async (req, res, next) => {
       postalCode,
       country: country || 'India',
       status: 'pending',
-      isMobileVerified: false
+      isMobileVerified: false,
+      // KYC Verification data
+      isPanVerified,
+      isAadharVerified,
+      isDlVerified,
+      isGstinVerified,
+      kycVerificationData: kycVerificationData,
+      kycVerifiedAt: Object.keys(kycVerificationData).length > 0 ? new Date() : null
     });
 
     // Save device token if provided
@@ -795,13 +862,47 @@ exports.registerVendor = async (req, res, next) => {
     const vendorResponse = newVendor.toJSON();
     delete vendorResponse.password;
 
+    // Build a detailed response message about verification status
+    let verificationMessage = '';
+    
+    if (panNumber && !isPanVerified) {
+      verificationMessage += 'PAN verification failed. ';
+    }
+    
+    if (idProofType === 'Aadhar Card' && idProofNumber && !isAadharVerified) {
+      verificationMessage += 'Aadhaar verification failed. ';
+    }
+    
+    if (idProofType === 'Driving License' && idProofNumber && !isDlVerified) {
+      verificationMessage += 'Driving License verification failed. ';
+    }
+    
+    if (gstinNumber && !isGstinVerified) {
+      verificationMessage += 'GSTIN verification failed. ';
+    }
+    
+    // Create the full message
+    let fullMessage = otpSent ? 'Vendor registered successfully. OTP sent to your mobile number. ' : 'Vendor registered successfully, but there was an issue sending OTP. ';
+    
+    if (verificationMessage) {
+      fullMessage += verificationMessage + 'Please ensure your documents are valid or contact support.';
+    } else if (Object.keys(kycVerificationData).length > 0) {
+      fullMessage += 'All provided documents were successfully verified.';
+    }
+
     res.status(201).json({
       status: 'success',
       token,
-      message: otpSent ? 'Vendor registered successfully. OTP sent to your mobile number.' : 'Vendor registered successfully, but there was an issue sending OTP.',
+      message: fullMessage,
       data: {
         vendor: vendorResponse,
-        store: store
+        store: store,
+        verificationStatus: {
+          isPanVerified,
+          isAadharVerified,
+          isDlVerified,
+          isGstinVerified
+        }
       }
     });
   } catch (error) {
