@@ -702,6 +702,7 @@ exports.registerVendor = async (req, res, next) => {
     let isAadharVerified = false;
     let isDlVerified = false;
     let isGstinVerified = false;
+    let isVoterIdVerified = false;
     
     try {
       // Verify PAN if provided
@@ -735,6 +736,17 @@ exports.registerVendor = async (req, res, next) => {
         
         if (!isDlVerified) {
           console.log(`DL verification failed for ${idProofNumber}:`, dlVerification.message);
+        }
+      }
+      
+      // Verify Voter ID if that's the ID proof type
+      if (idProofType === 'Voter ID' && idProofNumber) {
+        const voterIdVerification = await cashfreeService.verifyVoterId(idProofNumber, { name: fullName });
+        isVoterIdVerified = voterIdVerification.verified;
+        kycVerificationData.voterId = voterIdVerification;
+        
+        if (!isVoterIdVerified) {
+          console.log(`Voter ID verification failed for ${idProofNumber}:`, voterIdVerification.message);
         }
       }
       
@@ -791,6 +803,7 @@ exports.registerVendor = async (req, res, next) => {
       isAadharVerified,
       isDlVerified,
       isGstinVerified,
+      isVoterIdVerified,
       kycVerificationData: kycVerificationData,
       kycVerifiedAt: Object.keys(kycVerificationData).length > 0 ? new Date() : null
     });

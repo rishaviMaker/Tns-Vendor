@@ -141,6 +141,11 @@ const Vendor = sequelize.define('Vendor', {
     defaultValue: false,
     comment: 'GSTIN verification status'
   },
+  isVoterIdVerified: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false,
+    comment: 'Voter ID verification status'
+  },
   kycVerificationData: {
     type: DataTypes.JSON,
     allowNull: true,

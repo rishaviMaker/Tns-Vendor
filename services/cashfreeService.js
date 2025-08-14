@@ -11,13 +11,15 @@ const PAN_VERIFICATION_ENDPOINT = '/pan';
 const AADHAAR_VERIFICATION_ENDPOINT = '/aadhaar';
 const DL_VERIFICATION_ENDPOINT = '/dl';
 const GSTIN_VERIFICATION_ENDPOINT = '/gstin';
+const VOTER_ID_VERIFICATION_ENDPOINT = '/voterid';
 
 // Cache to store recent successful verifications (to reduce API calls)
 const verificationCache = {
   pan: new Map(),
   aadhaar: new Map(),
   dl: new Map(),
-  gstin: new Map()
+  gstin: new Map(),
+  voterId: new Map()
 };
 
 // Expiry time for cache entries (24 hours)
@@ -276,8 +278,65 @@ const verifyGSTIN = async (gstinNumber) => {
 };
 
 /**
+ * Verify Voter ID details
+ * @param {string} voterIdNumber - Voter ID number to verify
+ * @param {Object} options - Additional options like name (optional)
+ * @returns {Promise<Object>} Verification result
+ */
+const verifyVoterId = async (voterIdNumber, options = {}) => {
+  try {
+    // Check cache first
+    const cachedResult = checkCache('voterId', voterIdNumber);
+    if (cachedResult) {
+      return {
+        verified: cachedResult.verified,
+        message: 'Verification result from cache',
+        data: cachedResult
+      };
+    }
+
+    const payload = { voterId: voterIdNumber };
+    
+    // Add name if provided
+    if (options.name) {
+      payload.name = options.name;
+    }
+
+    const response = await axios.post(
+      `${CASHFREE_API_BASE_URL}${VOTER_ID_VERIFICATION_ENDPOINT}`,
+      payload,
+      { headers: getCashfreeHeaders() }
+    );
+
+    const result = response.data;
+    const verified = result.status === 'SUCCESS' || result.status === 'VALID';
+
+    // Cache successful verifications
+    if (verified) {
+      cacheResult('voterId', voterIdNumber, {
+        verified,
+        ...result
+      });
+    }
+
+    return {
+      verified,
+      message: verified ? 'Voter ID verified successfully' : 'Voter ID verification failed',
+      data: result
+    };
+  } catch (error) {
+    console.error('Error verifying Voter ID:', error.response?.data || error.message);
+    return {
+      verified: false,
+      message: 'Error during Voter ID verification',
+      error: error.response?.data || error.message
+    };
+  }
+};
+
+/**
  * Verify ID proof based on type
- * @param {string} idProofType - Type of ID proof (Aadhar Card, PAN Card, Driving License)
+ * @param {string} idProofType - Type of ID proof (Aadhar Card, PAN Card, Driving License, Voter ID)
  * @param {string} idProofNumber - ID proof number
  * @param {Object} options - Additional options like name, dob etc.
  * @returns {Promise<Object>} Verification result
@@ -290,6 +349,8 @@ const verifyIdProof = async (idProofType, idProofNumber, options = {}) => {
       return await verifyAadhaar(idProofNumber, options.name);
     case 'Driving License':
       return await verifyDL(idProofNumber, options.dob);
+    case 'Voter ID':
+      return await verifyVoterId(idProofNumber, { name: options.name });
     default:
       return {
         verified: false,
@@ -303,5 +364,6 @@ module.exports = {
   verifyAadhaar,
   verifyDL,
   verifyGSTIN,
+  verifyVoterId,
   verifyIdProof
 };

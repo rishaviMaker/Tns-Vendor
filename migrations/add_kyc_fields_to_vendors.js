@@ -37,11 +37,18 @@ module.exports = {
         after: 'isDlVerified'
       });
 
+      await queryInterface.addColumn('Vendors', 'isVoterIdVerified', {
+        type: Sequelize.BOOLEAN,
+        defaultValue: false,
+        comment: 'Voter ID verification status',
+        after: 'isGstinVerified'
+      });
+
       await queryInterface.addColumn('Vendors', 'kycVerificationData', {
         type: Sequelize.JSON,
         allowNull: true,
         comment: 'Stores detailed verification responses from Cashfree API',
-        after: 'isGstinVerified'
+        after: 'isVoterIdVerified'
       });
 
       await queryInterface.addColumn('Vendors', 'kycVerifiedAt', {
@@ -64,6 +71,7 @@ module.exports = {
       // Remove the columns in reverse order
       await queryInterface.removeColumn('Vendors', 'kycVerifiedAt');
       await queryInterface.removeColumn('Vendors', 'kycVerificationData');
+      await queryInterface.removeColumn('Vendors', 'isVoterIdVerified');
       await queryInterface.removeColumn('Vendors', 'isGstinVerified');
       await queryInterface.removeColumn('Vendors', 'isDlVerified');
       await queryInterface.removeColumn('Vendors', 'isAadharVerified');
