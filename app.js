@@ -21,6 +21,7 @@ const revenueRoutes = require('./routes/revenueRoutes');
 const productSearchRoutes = require('./routes/productSearchRoutes');
 const productRequestRoutes = require('./routes/productRequestRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
+const kycRoutes = require('./routes/kycRoutes');
 
 // Import error handler middleware
 const errorHandler = require('./middlewares/errorHandler');
@@ -52,6 +53,7 @@ app.use('/api/categories', categoryRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/coupons', discountRoutes);
+app.use('/api/vendor/kyc', kycRoutes);
 app.use('/api/withdrawals', withdrawalRoutes);
 app.use('/api/revenue', revenueRoutes);
 app.use('/api/product-search', productSearchRoutes);

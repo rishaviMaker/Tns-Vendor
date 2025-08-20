@@ -6,9 +6,11 @@
 const axios = require('axios');
 
 // KYC verification API endpoints
+// Base URL for Cashfree API
 const CASHFREE_API_BASE_URL = process.env.CASHFREE_API_BASE_URL || 'https://api.cashfree.com/verification';
 const PAN_VERIFICATION_ENDPOINT = '/pan';
-const AADHAAR_VERIFICATION_ENDPOINT = '/aadhaar';
+// Using offline-aadhaar endpoint based on Cashfree documentation
+const AADHAAR_VERIFICATION_ENDPOINT = '/offline-aadhaar';
 const DL_VERIFICATION_ENDPOINT = '/dl';
 const GSTIN_VERIFICATION_ENDPOINT = '/gstin';
 const VOTER_ID_VERIFICATION_ENDPOINT = '/voterid';
@@ -30,9 +32,33 @@ const CACHE_EXPIRY_MS = 24 * 60 * 60 * 1000;
  * @returns {Object} Headers with authentication details
  */
 const getCashfreeHeaders = () => {
+  // Primary credentials from environment variables
+  const clientId = process.env.CASHFREE_CLIENT_ID;
+  const clientSecret = process.env.CASHFREE_CLIENT_SECRET;
+  
+  // Fallback credentials for development - THESE SHOULD BE REPLACED WITH ACTUAL VALUES IN PRODUCTION
+  // NOTE: This is only for development purposes. In a production environment, always use environment variables.
+  const fallbackClientId = 'CF774792CVV4EV5IEPUC73B3JRMG'; // Your actual client ID 
+  const fallbackClientSecret = ''; // Your actual client secret needs to be added here for testing
+  
+  // Use environment variables if available, otherwise use fallbacks
+  const finalClientId = clientId || fallbackClientId;
+  const finalClientSecret = clientSecret || fallbackClientSecret;
+  
+  // Log authentication status for debugging
+  if (!finalClientSecret) {
+    console.error('🚨 CRITICAL: Cashfree client secret is missing. Authentication will fail!');
+    console.error('Please add CASHFREE_CLIENT_SECRET to your environment variables or update the fallback in getCashfreeHeaders()');
+  }
+  
+  if (!finalClientId) {
+    console.error('🚨 CRITICAL: Cashfree client ID is missing!');
+  }
+
+  // Return headers with the best credentials we have
   return {
-    'x-client-id': process.env.CASHFREE_CLIENT_ID,
-    'x-client-secret': process.env.CASHFREE_CLIENT_SECRET,
+    'x-client-id': finalClientId || '',
+    'x-client-secret': finalClientSecret || '',
     'x-api-version': '2022-01-01',
     'Content-Type': 'application/json'
   };
@@ -96,10 +122,23 @@ const verifyPAN = async (panNumber, name = '') => {
       };
     }
 
+    // Log request details for debugging
+    const url = `${CASHFREE_API_BASE_URL}${PAN_VERIFICATION_ENDPOINT}`;
+    
+    // Using snake_case for consistency with Aadhaar endpoint
+    const payload = {
+      pan_number: panNumber,
+      name: name || ''
+    };
+    
+    const headers = getCashfreeHeaders();
+    
+    console.log('PAN Verification Request:', { url, payload, headers: { ...headers, 'x-client-secret': '[REDACTED]' } });
+
     const response = await axios.post(
-      `${CASHFREE_API_BASE_URL}${PAN_VERIFICATION_ENDPOINT}`,
-      { pan: panNumber, name: name },
-      { headers: getCashfreeHeaders() }
+      url,
+      payload,
+      { headers }
     );
 
     const result = response.data;
@@ -129,15 +168,66 @@ const verifyPAN = async (panNumber, name = '') => {
 };
 
 /**
- * Verify Aadhaar Card details
- * @param {string} aadhaarNumber - Aadhaar number to verify
+ * Initiate Aadhaar verification with OTP
+ * @param {string} idProof - Aadhaar number to verify
  * @param {string} name - Name as per Aadhaar (optional)
+ * @returns {Promise<Object>} OTP request result
+ */
+const requestAadhaarOtp = async (idProof) => {
+  try {
+    // Log request details for debugging
+    const url = `${CASHFREE_API_BASE_URL}${AADHAAR_VERIFICATION_ENDPOINT}/otp`;
+    
+    // Payload for OTP request - try different formats that Cashfree might expect
+    const payload = {
+      aadhaar_number: idProof,
+      aadhaarNumber: idProof,  // Try camelCase format as well
+      id_number: idProof       // Generic format as fallback
+    };
+    
+    const headers = getCashfreeHeaders();
+    
+    console.log('Aadhaar OTP Request:', { url, payload, headers: { ...headers, 'x-client-secret': '[REDACTED]' } });
+
+    const response = await axios.post(
+      url,
+      payload,
+      { headers }
+    );
+
+    return {
+      success: true,
+      message: 'OTP sent successfully',
+      data: response.data
+    };
+  } catch (error) {
+    console.error('Error requesting Aadhaar OTP:', {
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      data: error.response?.data,
+      message: error.message
+    });
+    
+    return {
+      success: false,
+      message: 'Error requesting Aadhaar OTP',
+      error: error.response?.data || error.message
+    };
+  }
+};
+
+/**
+ * Verify Aadhaar Card details
+ * @param {string} idProof - Aadhaar number to verify
+ * @param {string} name - Name as per Aadhaar (optional)
+ * @param {string} otp - OTP received on registered mobile (optional)
+ * @param {string} requestId - Request ID from OTP request (optional)
  * @returns {Promise<Object>} Verification result
  */
-const verifyAadhaar = async (aadhaarNumber, name = '') => {
+const verifyAadhaar = async (idProof, name = '', otp = '', requestId = '') => {
   try {
     // Check cache first
-    const cachedResult = checkCache('aadhaar', aadhaarNumber);
+    const cachedResult = checkCache('aadhaar', idProof);
     if (cachedResult) {
       return {
         verified: cachedResult.verified,
@@ -145,11 +235,29 @@ const verifyAadhaar = async (aadhaarNumber, name = '') => {
         data: cachedResult
       };
     }
+    
+    // If OTP and requestId are not provided, initiate the OTP request flow
+    if (!otp || !requestId) {
+      return await requestAadhaarOtp(idProof);
+    }
+    
+    // Log request details for debugging
+    const url = `${CASHFREE_API_BASE_URL}${AADHAAR_VERIFICATION_ENDPOINT}/verify`;
+    
+    // Payload for OTP verification
+    const payload = {
+      otp: otp,
+      request_id: requestId
+    };
+    
+    const headers = getCashfreeHeaders();
+    
+    console.log('Aadhaar Verification Request:', { url, payload, headers: { ...headers, 'x-client-secret': '[REDACTED]' } });
 
     const response = await axios.post(
-      `${CASHFREE_API_BASE_URL}${AADHAAR_VERIFICATION_ENDPOINT}`,
-      { aadhaar: aadhaarNumber, name: name },
-      { headers: getCashfreeHeaders() }
+      url,
+      payload,
+      { headers }    
     );
 
     const result = response.data;
@@ -157,7 +265,7 @@ const verifyAadhaar = async (aadhaarNumber, name = '') => {
 
     // Cache successful verifications
     if (verified) {
-      cacheResult('aadhaar', aadhaarNumber, {
+      cacheResult('aadhaar', idProof, {
         verified,
         ...result
       });
@@ -169,11 +277,24 @@ const verifyAadhaar = async (aadhaarNumber, name = '') => {
       data: result
     };
   } catch (error) {
-    console.error('Error verifying Aadhaar:', error.response?.data || error.message);
+    // Enhanced error logging
+    console.error('Error verifying Aadhaar:', {
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      data: error.response?.data,
+      message: error.message,
+      code: error.code,
+      url: `${CASHFREE_API_BASE_URL}${AADHAAR_VERIFICATION_ENDPOINT}`
+    });
+    
     return {
       verified: false,
       message: 'Error during Aadhaar verification',
-      error: error.response?.data || error.message
+      error: error.response?.data || error.message,
+      errorDetails: {
+        status: error.response?.status,
+        statusText: error.response?.statusText
+      }
     };
   }
 };
@@ -196,10 +317,23 @@ const verifyDL = async (dlNumber, dob = '') => {
       };
     }
 
+    // Log request details for debugging
+    const url = `${CASHFREE_API_BASE_URL}${DL_VERIFICATION_ENDPOINT}`;
+    
+    // Using snake_case for consistency with other endpoints
+    const payload = {
+      dl_number: dlNumber,
+      dob: dob || ''
+    };
+    
+    const headers = getCashfreeHeaders();
+    
+    console.log('DL Verification Request:', { url, payload, headers: { ...headers, 'x-client-secret': '[REDACTED]' } });
+
     const response = await axios.post(
-      `${CASHFREE_API_BASE_URL}${DL_VERIFICATION_ENDPOINT}`,
-      { dl: dlNumber, dob: dob },
-      { headers: getCashfreeHeaders() }
+      url,
+      payload,
+      { headers }
     );
 
     const result = response.data;
@@ -245,10 +379,22 @@ const verifyGSTIN = async (gstinNumber) => {
       };
     }
 
+    // Log request details for debugging
+    const url = `${CASHFREE_API_BASE_URL}${GSTIN_VERIFICATION_ENDPOINT}`;
+    
+    // Using snake_case for consistency
+    const payload = {
+      gstin_number: gstinNumber
+    };
+    
+    const headers = getCashfreeHeaders();
+    
+    console.log('GSTIN Verification Request:', { url, payload, headers: { ...headers, 'x-client-secret': '[REDACTED]' } });
+
     const response = await axios.post(
-      `${CASHFREE_API_BASE_URL}${GSTIN_VERIFICATION_ENDPOINT}`,
-      { gstin: gstinNumber },
-      { headers: getCashfreeHeaders() }
+      url,
+      payload,
+      { headers }
     );
 
     const result = response.data;
@@ -279,14 +425,14 @@ const verifyGSTIN = async (gstinNumber) => {
 
 /**
  * Verify Voter ID details
- * @param {string} voterIdNumber - Voter ID number to verify
+ * @param {string} idProof - Voter ID number to verify
  * @param {Object} options - Additional options like name (optional)
  * @returns {Promise<Object>} Verification result
  */
-const verifyVoterId = async (voterIdNumber, options = {}) => {
+const verifyVoterId = async (idProof, options = {}) => {
   try {
     // Check cache first
-    const cachedResult = checkCache('voterId', voterIdNumber);
+    const cachedResult = checkCache('voterId', idProof);
     if (cachedResult) {
       return {
         verified: cachedResult.verified,
@@ -295,17 +441,25 @@ const verifyVoterId = async (voterIdNumber, options = {}) => {
       };
     }
 
-    const payload = { voterId: voterIdNumber };
+    // Log request details for debugging
+    const url = `${CASHFREE_API_BASE_URL}${VOTER_ID_VERIFICATION_ENDPOINT}`;
+    
+    // Using snake_case for consistency
+    const payload = { voter_id: idProof };
     
     // Add name if provided
     if (options.name) {
       payload.name = options.name;
     }
+    
+    const headers = getCashfreeHeaders();
+    
+    console.log('Voter ID Verification Request:', { url, payload, headers: { ...headers, 'x-client-secret': '[REDACTED]' } });
 
     const response = await axios.post(
-      `${CASHFREE_API_BASE_URL}${VOTER_ID_VERIFICATION_ENDPOINT}`,
+      url,
       payload,
-      { headers: getCashfreeHeaders() }
+      { headers }
     );
 
     const result = response.data;
@@ -313,7 +467,7 @@ const verifyVoterId = async (voterIdNumber, options = {}) => {
 
     // Cache successful verifications
     if (verified) {
-      cacheResult('voterId', voterIdNumber, {
+      cacheResult('voterId', idProof, {
         verified,
         ...result
       });

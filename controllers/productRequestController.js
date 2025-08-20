@@ -53,7 +53,14 @@ const productRequestController = {
 
       try {
         const { 
-          name, price, sale_price, quantity, shipping_charges, shipping_included
+          name, price, sale_price, quantity, shipping_charges, shipping_included,
+          // Optional extended fields
+          description, content, sku, order,
+          allow_checkout_when_out_of_stock, with_storehouse_management, is_featured,
+          brand_id, is_variation, sale_type, start_date, end_date,
+          length, wide, height, weight, tax_id, views, stock_status, store_id,
+          created_by_id, created_by_type, approved_by, image, category, sub_category,
+          videos, purchase_price, hsn_sac_code, applicable_tax, unit, is_quotable
         } = req.body;
 console.log(req.body);
         // Validate required fields
@@ -78,11 +85,26 @@ console.log(req.body);
         //   return next(new AppError('Store not found or does not belong to this vendor', 404));
         // }
 
-        // Process uploaded images
-        let imageUrls = [];
+        // Helpers
+        const toBool = (v) => v === true || v === 'true' || v === 1 || v === '1';
+        const parseList = (val) => {
+          if (!val) return [];
+          if (Array.isArray(val)) return val;
+          try { return JSON.parse(val); } catch (_) {
+            if (typeof val === 'string') return val.split(',').map(s => s.trim()).filter(Boolean);
+            return [];
+          }
+        };
+
+        // Merge images from body (if any) and uploaded files
+        let imageUrls = parseList(req.body.images);
         if (req.files && req.files.length > 0) {
-          imageUrls = req.files.map(file => `/uploads/product-requests/${file.filename}`);
+          const uploaded = req.files.map(file => `/uploads/product-requests/${file.filename}`);
+          imageUrls = [...imageUrls, ...uploaded];
         }
+
+        // Parse videos list if provided
+        const videosParsed = parseList(videos);
 
         // Create product request
         const productRequest = await ProductRequest.create({
@@ -93,9 +115,21 @@ console.log(req.body);
           sale_price: sale_price || null,
           quantity,
           shipping_charges: shipping_charges || 0,
-          shipping_included: shipping_included === 'true' || shipping_included === true,
+          shipping_included: toBool(shipping_included),
           images: imageUrls,
-          status: 'pending'
+          status: 'pending',
+          // Extended optional fields (only set if provided)
+          description, content, sku, order,
+          allow_checkout_when_out_of_stock: allow_checkout_when_out_of_stock !== undefined ? toBool(allow_checkout_when_out_of_stock) : undefined,
+          with_storehouse_management: with_storehouse_management !== undefined ? toBool(with_storehouse_management) : undefined,
+          is_featured: is_featured !== undefined ? toBool(is_featured) : undefined,
+          brand_id, is_variation: is_variation !== undefined ? toBool(is_variation) : undefined,
+          sale_type, start_date, end_date,
+          length, wide, height, weight, tax_id, views, stock_status, store_id,
+          created_by_id, created_by_type, approved_by, image, category, sub_category,
+          videos: videosParsed.length ? videosParsed : undefined,
+          purchase_price, hsn_sac_code, applicable_tax, unit,
+          is_quotable: is_quotable !== undefined ? toBool(is_quotable) : undefined
         });
 
         // Fetch vendor details for the response
@@ -251,8 +285,25 @@ console.log(req.body);
 
       // Update allowed fields
       const { 
-        name, price, sale_price, quantity, shipping_charges, shipping_included
+        name, price, sale_price, quantity, shipping_charges, shipping_included,
+        description, content, sku, order,
+        allow_checkout_when_out_of_stock, with_storehouse_management, is_featured,
+        brand_id, is_variation, sale_type, start_date, end_date,
+        length, wide, height, weight, tax_id, views, stock_status, store_id,
+        created_by_id, created_by_type, approved_by, image, category, sub_category,
+        videos, purchase_price, hsn_sac_code, applicable_tax, unit, is_quotable, images
       } = req.body;
+
+      // Helpers
+      const toBool = (v) => v === true || v === 'true' || v === 1 || v === '1';
+      const parseList = (val) => {
+        if (!val) return [];
+        if (Array.isArray(val)) return val;
+        try { return JSON.parse(val); } catch (_) {
+          if (typeof val === 'string') return val.split(',').map(s => s.trim()).filter(Boolean);
+          return [];
+        }
+      };
 
       // Update the product request
       await productRequest.update({
@@ -261,7 +312,41 @@ console.log(req.body);
         sale_price: sale_price !== undefined ? sale_price : productRequest.sale_price,
         quantity: quantity !== undefined ? quantity : productRequest.quantity,
         shipping_charges: shipping_charges !== undefined ? shipping_charges : productRequest.shipping_charges,
-        shipping_included: shipping_included !== undefined ? (shipping_included === 'true' || shipping_included === true) : productRequest.shipping_included
+        shipping_included: shipping_included !== undefined ? toBool(shipping_included) : productRequest.shipping_included,
+        // Extended optional fields
+        description: description !== undefined ? description : productRequest.description,
+        content: content !== undefined ? content : productRequest.content,
+        sku: sku !== undefined ? sku : productRequest.sku,
+        order: order !== undefined ? order : productRequest.order,
+        allow_checkout_when_out_of_stock: allow_checkout_when_out_of_stock !== undefined ? toBool(allow_checkout_when_out_of_stock) : productRequest.allow_checkout_when_out_of_stock,
+        with_storehouse_management: with_storehouse_management !== undefined ? toBool(with_storehouse_management) : productRequest.with_storehouse_management,
+        is_featured: is_featured !== undefined ? toBool(is_featured) : productRequest.is_featured,
+        brand_id: brand_id !== undefined ? brand_id : productRequest.brand_id,
+        is_variation: is_variation !== undefined ? toBool(is_variation) : productRequest.is_variation,
+        sale_type: sale_type !== undefined ? sale_type : productRequest.sale_type,
+        start_date: start_date !== undefined ? start_date : productRequest.start_date,
+        end_date: end_date !== undefined ? end_date : productRequest.end_date,
+        length: length !== undefined ? length : productRequest.length,
+        wide: wide !== undefined ? wide : productRequest.wide,
+        height: height !== undefined ? height : productRequest.height,
+        weight: weight !== undefined ? weight : productRequest.weight,
+        tax_id: tax_id !== undefined ? tax_id : productRequest.tax_id,
+        views: views !== undefined ? views : productRequest.views,
+        stock_status: stock_status !== undefined ? stock_status : productRequest.stock_status,
+        store_id: store_id !== undefined ? store_id : productRequest.store_id,
+        created_by_id: created_by_id !== undefined ? created_by_id : productRequest.created_by_id,
+        created_by_type: created_by_type !== undefined ? created_by_type : productRequest.created_by_type,
+        approved_by: approved_by !== undefined ? approved_by : productRequest.approved_by,
+        image: image !== undefined ? image : productRequest.image,
+        category: category !== undefined ? category : productRequest.category,
+        sub_category: sub_category !== undefined ? sub_category : productRequest.sub_category,
+        videos: videos !== undefined ? parseList(videos) : productRequest.videos,
+        purchase_price: purchase_price !== undefined ? purchase_price : productRequest.purchase_price,
+        hsn_sac_code: hsn_sac_code !== undefined ? hsn_sac_code : productRequest.hsn_sac_code,
+        applicable_tax: applicable_tax !== undefined ? applicable_tax : productRequest.applicable_tax,
+        unit: unit !== undefined ? unit : productRequest.unit,
+        is_quotable: is_quotable !== undefined ? toBool(is_quotable) : productRequest.is_quotable,
+        images: images !== undefined ? parseList(images) : productRequest.images
       });
 
       res.status(200).json({
