@@ -22,6 +22,8 @@ const productSearchRoutes = require('./routes/productSearchRoutes');
 const productRequestRoutes = require('./routes/productRequestRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
 const kycRoutes = require('./routes/kycRoutes');
+const warehouseRoutes = require('./routes/warehouseRoutes');
+const pincodeRoutes = require('./routes/pincodeRoutes');
 
 // Import error handler middleware
 const errorHandler = require('./middlewares/errorHandler');
@@ -59,6 +61,8 @@ app.use('/api/revenue', revenueRoutes);
 app.use('/api/product-search', productSearchRoutes);
 app.use('/api/product-requests', productRequestRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/warehouse', warehouseRoutes);
+app.use('/api/pincode', pincodeRoutes);
 
 // Mount static files if needed for Swagger UI
 app.use('/public', express.static('public'));
