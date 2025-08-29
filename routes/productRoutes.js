@@ -63,6 +63,12 @@ const router = express.Router();
  *         $ref: '#/components/responses/ServerError'
  */
 router.get('/', authenticate, productController.getAllProducts); // Added authentication
+
+router.get('/taxes', authenticate, productController.getTaxes);
+router.get('/labels', authenticate, productController.getLabels);
+router.get('/brands', authenticate, productController.getBrands);
+router.get('/collections', authenticate, productController.getProductCollections);
+
 /**
  * @swagger
  * /api/products/{id}:
