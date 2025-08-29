@@ -2,6 +2,7 @@ const { ProductRequest } = require('../models/ProductRequest');
 const { Product } = require('../models/Product');
 const { Vendor } = require('../models/Vendor');
 const { Store } = require('../models/Store');
+const { ProductCategoryProduct } = require('../models/ProductCategoryProduct');
 const AppError = require('../utils/AppError');
 const { uploadProductImagesToRemote } = require('../services/remoteImageService');
 const multer = require('multer');
@@ -102,6 +103,7 @@ const productRequestController = {
 
         // Merge images from body (if any) and uploaded files, prioritizing remote upload if configured
         let imageUrls = parseList(req.body.images);
+        console.table(req.body);
         // Gather all uploaded files from both keys
         const filesFromRequest = [];
         if (req.files) {
