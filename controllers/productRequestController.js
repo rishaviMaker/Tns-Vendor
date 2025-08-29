@@ -334,12 +334,8 @@ const productRequestController = {
           brand_id, is_variation, sale_type, start_date, end_date,
           length, wide, height, weight, tax_id, views, stock_status, store_id,
           created_by_id, created_by_type, approved_by, image, category, sub_category,
-<<<<<<< Updated upstream
-          videos, purchase_price, hsn_sac_code, applicable_tax, unit, is_quotable, warehouse_id, category_id
-=======
           videos, purchase_price, hsn_sac_code, applicable_tax, unit, is_quotable,
           remote_product_id
->>>>>>> Stashed changes
         } = req.body;
 
         // Helpers
