@@ -100,8 +100,8 @@ const productRequestController = {
           }
         };
 
-        // Merge images from body (if any) and uploaded files, prioritizing remote upload if configured
-        let imageUrls = parseList(req.body.images);
+        // Images provided directly in body (if any)
+        const bodyImageUrls = parseList(req.body.images);
         // Gather all uploaded files from both keys
         const filesFromRequest = [];
         if (req.files) {
@@ -113,73 +113,11 @@ const productRequestController = {
           }
         }
 
-        if (filesFromRequest.length > 0) {
-          let usedRemote = false;
-
-          // Create a shadow product to generate an ID for remote upload
-          let shadowProduct = null;
-          try {
-            const vendorId = req.user.id;
-            const store = await Store.findOne({ where: { customer_id: vendorId } });
-            const shadowData = {
-              name,
-              description: description || null,
-              content: content || null,
-              price: price ? parseFloat(price) : null,
-              sale_price: sale_price ? parseFloat(sale_price) : null,
-              quantity: quantity ? parseInt(quantity, 10) : 0,
-              sku: sku || null,
-              store_id: store ? store.id : null,
-              status: 'pending',
-              category: req.body.category || null,
-              sub_category: req.body.sub_category || null,
-              brand_id: req.body.brand_id || null,
-              sale_type: req.body.sale_type || null,
-              length: req.body.length || null,
-              wide: req.body.wide || null,
-              height: req.body.height || null,
-              weight: req.body.weight || null,
-              tax_id: req.body.tax_id || null,
-              unit: req.body.unit || null,
-              shipping_charges: shipping_charges || 0,
-              shipping_included: toBool(shipping_included),
-              created_at: new Date(),
-              updated_at: new Date()
-            };
-            shadowProduct = await Product.create(shadowData);
-          } catch (e) {
-            console.error('Failed to create shadow product for remote image upload:', e?.message || e);
-          }
-
-          if (shadowProduct && shadowProduct.id) {
-            const { linkList } = await uploadProductImagesToRemote(shadowProduct.id, filesFromRequest, req.headers);
-            if (linkList && linkList.length > 0) {
-              imageUrls = [...imageUrls, ...linkList];
-              usedRemote = true;
-              // Persist images on shadow product too
-              try {
-                await Product.update(
-                  { images: JSON.stringify(linkList), image: linkList[0] || null },
-                  { where: { id: shadowProduct.id } }
-                );
-              } catch (e) {
-                console.error('Failed to update shadow product images:', e?.message || e);
-              }
-            }
-          }
-
-          // Fallback to local if remote not used or returned no links
-          if (!usedRemote) {
-            const uploaded = filesFromRequest.map(file => `/uploads/product-requests/${file.filename}`);
-            imageUrls = [...imageUrls, ...uploaded];
-          }
-        }
-
         // Parse videos list if provided
         const videosParsed = parseList(videos);
 
-        // Create product request
-        const primaryImage = image || (imageUrls && imageUrls.length ? imageUrls[0] : null);
+        // Create product request (first), then upload images using its ID
+        const primaryImage = image || (bodyImageUrls && bodyImageUrls.length ? bodyImageUrls[0] : null);
         const productRequest = await ProductRequest.create({
           vendor_id: req.user.id,
           // store_id,
@@ -189,7 +127,7 @@ const productRequestController = {
           quantity,
           shipping_charges: shipping_charges || 0,
           shipping_included: toBool(shipping_included),
-          images: imageUrls,
+          images: bodyImageUrls,
           image: primaryImage,
           status: 'pending',
           // Extended optional fields (only set if provided)
@@ -200,12 +138,31 @@ const productRequestController = {
           brand_id, is_variation: is_variation !== undefined ? toBool(is_variation) : undefined,
           sale_type, start_date, end_date,
           length, wide, height, weight, tax_id, views, stock_status, store_id,
-          created_by_id, created_by_type, approved_by, image, category, sub_category,
+          created_by_id, created_by_type, approved_by, category, sub_category,
           videos: videosParsed.length ? videosParsed : undefined,
           purchase_price, hsn_sac_code, applicable_tax, unit,
           is_quotable: is_quotable !== undefined ? toBool(is_quotable) : undefined,
           warehouse_id
         });
+
+        // After creating, upload images to remote using the new ProductRequest ID, then update the record
+        if (filesFromRequest.length > 0) {
+          let finalImages = bodyImageUrls.slice();
+          try {
+            const { linkList } = await uploadProductImagesToRemote(productRequest.id, filesFromRequest, req.headers);
+            if (linkList && linkList.length > 0) {
+              finalImages = [...finalImages, ...linkList];
+            } else {
+              const fallback = filesFromRequest.map(file => `/uploads/product-requests/${file.filename}`);
+              finalImages = [...finalImages, ...fallback];
+            }
+          } catch (e) {
+            const fallback = filesFromRequest.map(file => `/uploads/product-requests/${file.filename}`);
+            finalImages = [...finalImages, ...fallback];
+          }
+          const updatedPrimary = image || (finalImages.length ? finalImages[0] : null);
+          await productRequest.update({ images: finalImages, image: updatedPrimary });
+        }
 
         // Fetch vendor details for the response
         const vendor = await Vendor.findByPk(req.user.id, {
@@ -376,7 +333,12 @@ const productRequestController = {
           brand_id, is_variation, sale_type, start_date, end_date,
           length, wide, height, weight, tax_id, views, stock_status, store_id,
           created_by_id, created_by_type, approved_by, image, category, sub_category,
+<<<<<<< Updated upstream
           videos, purchase_price, hsn_sac_code, applicable_tax, unit, is_quotable, warehouse_id, category_id
+=======
+          videos, purchase_price, hsn_sac_code, applicable_tax, unit, is_quotable,
+          remote_product_id
+>>>>>>> Stashed changes
         } = req.body;
 
         // Helpers
@@ -405,55 +367,24 @@ const productRequestController = {
         let uploadedImageUrls = [];
         if (filesFromRequest.length > 0) {
           let usedRemote = false;
-          // Create shadow product to get a product ID for remote upload
-          let shadowProduct = null;
-          try {
-            const vendorIdLocal = req.user.id;
-            const store = await Store.findOne({ where: { customer_id: vendorIdLocal } });
-            const shadowData = {
-              name: productRequest.name || 'Request Image Holder',
-              description: productRequest.description || null,
-              content: productRequest.content || null,
-              price: productRequest.price || null,
-              sale_price: productRequest.sale_price || null,
-              quantity: productRequest.quantity || 0,
-              sku: productRequest.sku || null,
-              store_id: store ? store.id : null,
-              status: 'pending',
-              category: productRequest.category || null,
-              sub_category: productRequest.sub_category || null,
-              brand_id: productRequest.brand_id || null,
-              sale_type: productRequest.sale_type || null,
-              length: productRequest.length || null,
-              wide: productRequest.wide || null,
-              height: productRequest.height || null,
-              weight: productRequest.weight || null,
-              tax_id: productRequest.tax_id || null,
-              unit: productRequest.unit || null,
-              shipping_charges: productRequest.shipping_charges || 0,
-              shipping_included: !!productRequest.shipping_included,
-              created_at: new Date(),
-              updated_at: new Date()
-            };
-            shadowProduct = await Product.create(shadowData);
-          } catch (e) {
-            console.error('Failed to create shadow product for remote image upload (update):', e?.message || e);
-          }
 
-          if (shadowProduct && shadowProduct.id) {
-            const { linkList } = await uploadProductImagesToRemote(shadowProduct.id, filesFromRequest, req.headers);
-            if (linkList && linkList.length > 0) {
-              uploadedImageUrls = linkList;
-              usedRemote = true;
-              try {
-                await Product.update(
-                  { images: JSON.stringify(linkList), image: linkList[0] || null },
-                  { where: { id: shadowProduct.id } }
-                );
-              } catch (e) {
-                console.error('Failed to update shadow product images (update):', e?.message || e);
+          const remoteIdRaw = remote_product_id || req.headers['x-remote-product-id'] || process.env.REMOTE_DEFAULT_PRODUCT_ID;
+          const remoteId = remoteIdRaw && !isNaN(parseInt(remoteIdRaw, 10)) ? parseInt(remoteIdRaw, 10) : null;
+
+          if (remoteId) {
+            try {
+              const { linkList } = await uploadProductImagesToRemote(remoteId, filesFromRequest, req.headers);
+              if (linkList && linkList.length > 0) {
+                uploadedImageUrls = linkList;
+                usedRemote = true;
+              } else {
+                console.warn('Remote upload returned no links for product request update; falling back to local');
               }
+            } catch (e) {
+              console.warn('Remote upload failed for product request update; falling back to local. Reason:', e?.message || e);
             }
+          } else {
+            console.warn('No remote_product_id provided; using local image URLs for product request update.');
           }
 
           // Fallback to local storage if remote not used or returned no links
