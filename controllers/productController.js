@@ -7,9 +7,19 @@ const { Store } = require('../models/Store');
 const { ProductRequest } = require('../models/ProductRequest');
 const productSearchService = require('../services/productSearchService');
 const AppError = require('../utils/AppError');
+const { uploadProductImagesToRemote } = require('../services/remoteImageService');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+
+// Common attribute whitelist used when fetching catalog product details
+const safeAttributes = [
+  'id', 'name', 'description', 'content', 'status', 'images', 'sku',
+  'order', 'quantity', 'price', 'sale_price', 'weight',
+  'created_at', 'updated_at', 'image', 'category', 'sub_category',
+  'videos', 'unit', 'brand_id', 'sale_type', 'length', 'wide', 'height',
+  'tax_id', 'is_featured'
+];
 
 // Configure storage for product files (images and videos)
 const storage = multer.diskStorage({
@@ -45,6 +55,7 @@ exports.upload = multer({
 }).fields([
   { name: 'image', maxCount: 1 }, // Primary product image
   { name: 'images', maxCount: 5 }, // Additional product images
+  { name: 'images[]', maxCount: 5 }, // Support form fields named images[]
   { name: 'videos', maxCount: 2 } // Product videos
 ]);
 
@@ -255,9 +266,6 @@ exports.createProduct = async (req, res, next) => {
       shipping_charges, // Shipping charges in INR
       shipping_included, // Whether shipping cost is included in price
       status = 'pending', // Default status is pending
-      brand_id,
-      label_id,
-      tax_id
     } = req.body;
     
     // Get vendor ID from authenticated user
@@ -287,13 +295,7 @@ exports.createProduct = async (req, res, next) => {
       // Include all the fields we need
       console.log(`Attempting to find product with ID: ${productId}`);
       catalogProduct = await Product.findByPk(productId, {
-        attributes: [
-          'id', 'name', 'description', 'content', 'status', 'images', 'sku',
-          'order', 'quantity', 'price', 'sale_price', 'weight',
-          'created_at', 'updated_at', 'image', 'category', 'sub_category',
-          'videos', 'unit', 'brand_id', 'sale_type', 'length', 'wide', 'height',
-           'tax_id', 'is_featured'
-        ]
+        attributes: safeAttributes
       });
       
       if (!catalogProduct) {
@@ -373,30 +375,63 @@ exports.createProduct = async (req, res, next) => {
       newProduct = await Product.create(productData);
       console.log('Product created successfully with ID:', newProduct.id);
       
-      // Handle file uploads
-      if (req.file) {
-        console.log('Processing primary image upload');
-        await Product.update(
-          { image: `/uploads/products/${req.file.filename}` },
-          { where: { id: newProduct.id } }
-        );
-        newProduct.image = `/uploads/products/${req.file.filename}`;
-      }
+      // No direct single-file handling here; primary image will be set from remote/local results below
       
       // Handle multiple files (images and videos) if present
       if (req.files) {
-        // Handle images
+        // First try remote upload for images (combining single 'image' and multiple 'images')
+        const candidateImages = [];
+        if (req.files.image && req.files.image.length > 0) {
+          candidateImages.push(...req.files.image);
+        }
         if (req.files.images && req.files.images.length > 0) {
-          console.log(`Processing ${req.files.images.length} additional images`);
-          const images = req.files.images.map(file => `/uploads/products/${file.filename}`);
-          await Product.update(
-            { images: JSON.stringify(images) },
-            { where: { id: newProduct.id } }
-          );
-          newProduct.images = JSON.stringify(images);
+          candidateImages.push(...req.files.images);
+        }
+        if (req.files['images[]'] && req.files['images[]'].length > 0) {
+          candidateImages.push(...req.files['images[]']);
+        }
+
+        let remoteUploaded = false;
+        if (candidateImages.length > 0) {
+          console.log(`Attempting remote upload of ${candidateImages.length} image(s) for product ${newProduct.id}`);
+          const { linkList } = await uploadProductImagesToRemote(newProduct.id, candidateImages, req.headers);
+          if (linkList && linkList.length > 0) {
+            await Product.update(
+              { images: JSON.stringify(linkList), image: linkList[0] || null },
+              { where: { id: newProduct.id } }
+            );
+            newProduct.images = JSON.stringify(linkList);
+            newProduct.image = linkList[0] || null;
+            remoteUploaded = true;
+          } else {
+            console.warn('Remote upload returned no links; falling back to local paths');
+          }
+        }
+
+        // Fallback to existing local behavior for images if remote failed or no files
+        if (!remoteUploaded) {
+          const localImages = [];
+          if (req.files.image && req.files.image.length > 0) {
+            localImages.push(...req.files.image.map(file => `/uploads/products/${file.filename}`));
+          }
+          if (req.files.images && req.files.images.length > 0) {
+            localImages.push(...req.files.images.map(file => `/uploads/products/${file.filename}`));
+          }
+          if (req.files['images[]'] && req.files['images[]'].length > 0) {
+            localImages.push(...req.files['images[]'].map(file => `/uploads/products/${file.filename}`));
+          }
+          if (localImages.length > 0) {
+            console.log(`Processing ${localImages.length} additional images (local fallback)`);
+            await Product.update(
+              { images: JSON.stringify(localImages), image: localImages[0] || null },
+              { where: { id: newProduct.id } }
+            );
+            newProduct.images = JSON.stringify(localImages);
+            newProduct.image = localImages[0] || null;
+          }
         }
         
-        // Handle videos
+        // Handle videos (unchanged)
         if (req.files.videos && req.files.videos.length > 0) {
           console.log(`Processing ${req.files.videos.length} videos`);
           const videos = req.files.videos.map(file => `/uploads/products/${file.filename}`);
@@ -451,79 +486,111 @@ exports.updateProduct = async (req, res, next) => {
       });
     }
     
-    // Update fields that are provided
+    // Authorization: ensure the product belongs to the authenticated vendor's store
+    const vendorStore = await Store.findOne({ where: { customer_id: req.user.id } });
+    if (!vendorStore) {
+      return res.status(403).json({
+        status: 'fail',
+        message: 'No store found for this vendor'
+      });
+    }
+    if (product.store_id !== vendorStore.id) {
+      return res.status(403).json({
+        status: 'fail',
+        message: 'You do not have permission to update this product'
+      });
+    }
+    
+    // Helpers
+    const toBool = (v) => v === true || v === 'true' || v === 1 || v === '1';
+    const parseList = (val) => {
+      if (val === undefined || val === null || val === '') return [];
+      if (Array.isArray(val)) return val;
+      try { return JSON.parse(val); } catch (_) {
+        if (typeof val === 'string') return val.split(',').map(s => s.trim()).filter(Boolean);
+        return [];
+      }
+    };
+
+    // Apply simple field updates from body (keep existing behavior)
     Object.keys(req.body).forEach(key => {
-      if (req.body[key] !== undefined) {
+      if (req.body[key] !== undefined && key !== 'removeImages' && key !== 'removeVideo' && key !== 'images') {
         product[key] = req.body[key];
       }
     });
-    
-    // Handle image uploads if present
-    const mediaFiles = [];
-    
-    if (req.files) {
-      // Handle main image
-      if (req.files.image && req.files.image.length > 0) {
-        product.image = `/uploads/products/${req.files.image[0].filename}`;
-      }
-      
-      // Handle additional images
-      if (req.files.images && req.files.images.length > 0) {
-        const imageUrls = req.files.images.map(file => `/uploads/products/${file.filename}`);
-        mediaFiles.push(...imageUrls.map(url => ({ type: 'image', url })));
-      }
-      
-      // Handle videos
-      if (req.files.videos && req.files.videos.length > 0) {
-        const videoUrls = req.files.videos.map(file => `/uploads/products/${file.filename}`);
-        mediaFiles.push(...videoUrls.map(url => ({ type: 'video', url })));
-      }
-      
-      // Store all media files
-      if (mediaFiles.length > 0) {
-        product.media_files = JSON.stringify(mediaFiles);
+
+    // Parse existing images/videos
+    let existingImages = [];
+    try { if (product.images) existingImages = JSON.parse(product.images); } catch { existingImages = []; }
+    let existingVideos = [];
+    try { if (product.videos) existingVideos = JSON.parse(product.videos); } catch { existingVideos = []; }
+
+    // Handle removals
+    const removeImages = parseList(req.body.removeImages);
+    const removeVideo = toBool(req.body.removeVideo);
+    if (removeImages.length) {
+      existingImages = existingImages.filter(u => !removeImages.includes(u));
+      // If current primary image is removed, clear it for now; we'll reset below
+      if (product.image && removeImages.includes(product.image)) {
+        product.image = null;
       }
     }
-    
-    // Handle multiple files (images and videos) if present
+    if (removeVideo) {
+      existingVideos = [];
+    }
+
+    // Aggregate newly uploaded image files
+    const candidateImages = [];
     if (req.files) {
-      // Handle images
-      if (req.files.images && req.files.images.length > 0) {
-        const newImages = req.files.images.map(file => `/uploads/products/${file.filename}`);
-        
-        // Merge with existing images if any
-        let existingImages = [];
-        try {
-          if (product.images) {
-            existingImages = JSON.parse(product.images);
-          }
-        } catch (e) {
-          // If images is not a valid JSON, start fresh
-          existingImages = [];
+      if (req.files.image && req.files.image.length > 0) candidateImages.push(...req.files.image);
+      if (req.files.images && req.files.images.length > 0) candidateImages.push(...req.files.images);
+      if (req.files['images[]'] && req.files['images[]'].length > 0) candidateImages.push(...req.files['images[]']);
+    }
+
+    // Try remote upload first
+    let newImageLinks = [];
+    if (candidateImages.length > 0) {
+      try {
+        const { linkList } = await uploadProductImagesToRemote(product.id, candidateImages, req.headers);
+        if (linkList && linkList.length > 0) {
+          newImageLinks = linkList;
+        } else {
+          // Fallback to local URLs
+          newImageLinks = candidateImages.map(file => `/uploads/products/${file.filename}`);
         }
-        
-        product.images = JSON.stringify([...existingImages, ...newImages]);
-      }
-      
-      // Handle videos
-      if (req.files.videos && req.files.videos.length > 0) {
-        const newVideos = req.files.videos.map(file => `/uploads/products/videos/${file.filename}`);
-        
-        // Merge with existing videos if any
-        let existingVideos = [];
-        try {
-          if (product.videos) {
-            existingVideos = JSON.parse(product.videos);
-          }
-        } catch (e) {
-          // If videos is not a valid JSON, start fresh
-          existingVideos = [];
-        }
-        
-        product.videos = JSON.stringify([...existingVideos, ...newVideos]);
+      } catch (err) {
+        console.warn('Remote upload failed, using local image URLs. Reason:', err.message || err);
+        newImageLinks = candidateImages.map(file => `/uploads/products/${file.filename}`);
       }
     }
-    
+
+    // Also accept images passed directly in body to merge
+    const bodyImages = parseList(req.body.images);
+
+    // Merge and dedupe images
+    const mergedImages = Array.from(new Set([...existingImages, ...bodyImages, ...newImageLinks]));
+    product.images = JSON.stringify(mergedImages);
+
+    // Primary image logic: if an explicit body image is provided (req.body.image), keep it; else
+    // if a new main image file was sent or current primary was removed or empty, set to first merged image
+    if (!req.body.image && (candidateImages.length > 0 || !product.image)) {
+      product.image = mergedImages[0] || null;
+    } else if (req.body.image) {
+      product.image = req.body.image;
+    }
+
+    // Handle videos (local storage only for now)
+    let newVideos = [];
+    if (req.files && req.files.videos && req.files.videos.length > 0) {
+      newVideos = req.files.videos.map(file => `/uploads/products/${file.filename}`);
+    }
+    const mergedVideos = Array.from(new Set([...(existingVideos || []), ...newVideos]));
+    if (mergedVideos.length > 0) {
+      product.videos = JSON.stringify(mergedVideos);
+    } else if (removeVideo) {
+      product.videos = JSON.stringify([]);
+    }
+
     product.updated_at = new Date();
     await product.save();
     
@@ -555,6 +622,14 @@ exports.deleteProduct = async (req, res, next) => {
       });
     }
     
+    // Authorization: ensure the product belongs to the authenticated vendor's store
+    const vendorStore = await Store.findOne({ where: { customer_id: req.user.id } });
+    if (!vendorStore || product.store_id !== vendorStore.id) {
+      return res.status(403).json({
+        status: 'fail',
+        message: 'You do not have permission to delete this product'
+      });
+    }
     await product.destroy();
     
     res.status(200).json({
