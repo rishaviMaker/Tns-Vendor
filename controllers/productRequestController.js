@@ -60,9 +60,8 @@ const productRequestController = {
           brand_id, is_variation, sale_type, start_date, end_date,
           length, wide, height, weight, tax_id, views, stock_status, store_id,
           created_by_id, created_by_type, approved_by, image, category, sub_category,
-          videos, purchase_price, hsn_sac_code, applicable_tax, unit, is_quotable
+          videos, purchase_price, hsn_sac_code, applicable_tax, unit, is_quotable, category_id,warehouse_id
         } = req.body;
-console.log(req.body);
         // Validate required fields
         if (!name) {
           return next(new AppError('Product name is required', 400));
@@ -129,13 +128,21 @@ console.log(req.body);
           created_by_id, created_by_type, approved_by, image, category, sub_category,
           videos: videosParsed.length ? videosParsed : undefined,
           purchase_price, hsn_sac_code, applicable_tax, unit,
-          is_quotable: is_quotable !== undefined ? toBool(is_quotable) : undefined
+          is_quotable: is_quotable !== undefined ? toBool(is_quotable) : undefined,
+          warehouse_id
         });
 
         // Fetch vendor details for the response
         const vendor = await Vendor.findByPk(req.user.id, {
           attributes: ['id', 'fullName', 'email', 'mobileNumber']
         });
+
+        if (category_id) {
+          await ProductCategoryProduct.create({
+            category_id: category,
+            product_id: productRequest.id
+          });
+        }
 
         res.status(201).json({
           status: 'success',
@@ -291,7 +298,7 @@ console.log(req.body);
         brand_id, is_variation, sale_type, start_date, end_date,
         length, wide, height, weight, tax_id, views, stock_status, store_id,
         created_by_id, created_by_type, approved_by, image, category, sub_category,
-        videos, purchase_price, hsn_sac_code, applicable_tax, unit, is_quotable, images
+        videos, purchase_price, hsn_sac_code, applicable_tax, unit, is_quotable, images, warehouse_id, category_id
       } = req.body;
 
       // Helpers
@@ -346,9 +353,20 @@ console.log(req.body);
         applicable_tax: applicable_tax !== undefined ? applicable_tax : productRequest.applicable_tax,
         unit: unit !== undefined ? unit : productRequest.unit,
         is_quotable: is_quotable !== undefined ? toBool(is_quotable) : productRequest.is_quotable,
-        images: images !== undefined ? parseList(images) : productRequest.images
+        images: images !== undefined ? parseList(images) : productRequest.images,
+        warehouse_id: warehouse_id !== undefined ? warehouse_id : productRequest.warehouse_id,
       });
 
+      if (category_id) {
+        await ProductCategoryProduct.update({
+          category_id: category_id,
+          product_id: productRequest.id
+        }, {
+          where: {
+            product_id: productRequest.id
+          }
+        });
+      }
       res.status(200).json({
         status: 'success',
         message: 'Product request updated successfully',

@@ -9,6 +9,8 @@ const swaggerSpec = require('./swagger/config');
 // Load environment variables
 dotenv.config();
 
+
+const adminRoutes = require('./routes/adminRoutes');
 // Import routes
 const vendorRoutes = require('./routes/vendorRoutes');
 const storeRoutes = require('./routes/storeRoutes');
@@ -49,6 +51,7 @@ app.use(express.json()); // Parse JSON request body
 app.use(express.urlencoded({ extended: true })); // Parse URL-encoded request body
 
 // API Routes
+app.use('/admin', adminRoutes);
 app.use('/api/vendors', vendorRoutes);
 app.use('/api/stores', storeRoutes);
 app.use('/api/categories', categoryRoutes);

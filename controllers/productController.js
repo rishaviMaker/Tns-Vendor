@@ -96,7 +96,6 @@ exports.getBrands = async (req, res, next) => {
 exports.getProductCollections = async (req, res, next) => {
   try {
     const productCollections = await ProductCollection.findAll();
-    console.log(productCollections);
     res.status(200).json({
       status: 'success',
       data: {
@@ -255,7 +254,10 @@ exports.createProduct = async (req, res, next) => {
       quantity,
       shipping_charges, // Shipping charges in INR
       shipping_included, // Whether shipping cost is included in price
-      status = 'pending' // Default status is pending
+      status = 'pending', // Default status is pending
+      brand_id,
+      label_id,
+      tax_id
     } = req.body;
     
     // Get vendor ID from authenticated user

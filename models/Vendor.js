@@ -157,6 +157,7 @@ const Vendor = sequelize.define('Vendor', {
     comment: 'When the KYC verification was last performed'
   }
 }, {
+  tableName: 'vendors',
   timestamps: true
 });
 
