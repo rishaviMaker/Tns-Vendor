@@ -16,7 +16,7 @@ async function getVendor(preferredId) {
   // Create a demo vendor if none exists
   const ts = Date.now();
   const demoVendor = await Vendor.create({
-    fullName: 'Demo Vendor',
+    fullName: 'Rishav Vendor',
     email: `demo_vendor_${ts}@example.com`,
     password: 'Temp@12345',
     businessType: 'Retailer',
@@ -54,7 +54,7 @@ async function main() {
 
   const demoData = {
     vendor_id: vendor.id,
-    name: 'Demo Product',
+    name: 'Rishvav Product',
     description: 'This is a demo product request created by seed script.',
     content: '<p>Demo long content</p>',
     sku: 'DEMO-001',

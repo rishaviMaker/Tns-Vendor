@@ -1,7 +1,9 @@
 const { ProductRequest } = require('../models/ProductRequest');
+const { Product } = require('../models/Product');
 const { Vendor } = require('../models/Vendor');
 const { Store } = require('../models/Store');
 const AppError = require('../utils/AppError');
+const { uploadProductImagesToRemote } = require('../services/remoteImageService');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
@@ -33,7 +35,10 @@ const upload = multer({
     }
     cb(null, true);
   }
-}).array('images', 5); // Allow up to 5 images
+}).fields([
+  { name: 'images', maxCount: 5 },
+  { name: 'images[]', maxCount: 5 }
+]);
 
 /**
  * Product Request Controller
@@ -96,17 +101,86 @@ console.log(req.body);
           }
         };
 
-        // Merge images from body (if any) and uploaded files
+        // Merge images from body (if any) and uploaded files, prioritizing remote upload if configured
         let imageUrls = parseList(req.body.images);
-        if (req.files && req.files.length > 0) {
-          const uploaded = req.files.map(file => `/uploads/product-requests/${file.filename}`);
-          imageUrls = [...imageUrls, ...uploaded];
+        // Gather all uploaded files from both keys
+        const filesFromRequest = [];
+        if (req.files) {
+          if (Array.isArray(req.files)) {
+            filesFromRequest.push(...req.files);
+          } else {
+            if (req.files.images && req.files.images.length > 0) filesFromRequest.push(...req.files.images);
+            if (req.files['images[]'] && req.files['images[]'].length > 0) filesFromRequest.push(...req.files['images[]']);
+          }
+        }
+
+        if (filesFromRequest.length > 0) {
+          let usedRemote = false;
+
+          // Create a shadow product to generate an ID for remote upload
+          let shadowProduct = null;
+          try {
+            const vendorId = req.user.id;
+            const store = await Store.findOne({ where: { customer_id: vendorId } });
+            const shadowData = {
+              name,
+              description: description || null,
+              content: content || null,
+              price: price ? parseFloat(price) : null,
+              sale_price: sale_price ? parseFloat(sale_price) : null,
+              quantity: quantity ? parseInt(quantity, 10) : 0,
+              sku: sku || null,
+              store_id: store ? store.id : null,
+              status: 'pending',
+              category: req.body.category || null,
+              sub_category: req.body.sub_category || null,
+              brand_id: req.body.brand_id || null,
+              sale_type: req.body.sale_type || null,
+              length: req.body.length || null,
+              wide: req.body.wide || null,
+              height: req.body.height || null,
+              weight: req.body.weight || null,
+              tax_id: req.body.tax_id || null,
+              unit: req.body.unit || null,
+              shipping_charges: shipping_charges || 0,
+              shipping_included: toBool(shipping_included),
+              created_at: new Date(),
+              updated_at: new Date()
+            };
+            shadowProduct = await Product.create(shadowData);
+          } catch (e) {
+            console.error('Failed to create shadow product for remote image upload:', e?.message || e);
+          }
+
+          if (shadowProduct && shadowProduct.id) {
+            const { linkList } = await uploadProductImagesToRemote(shadowProduct.id, filesFromRequest, req.headers);
+            if (linkList && linkList.length > 0) {
+              imageUrls = [...imageUrls, ...linkList];
+              usedRemote = true;
+              // Persist images on shadow product too
+              try {
+                await Product.update(
+                  { images: JSON.stringify(linkList), image: linkList[0] || null },
+                  { where: { id: shadowProduct.id } }
+                );
+              } catch (e) {
+                console.error('Failed to update shadow product images:', e?.message || e);
+              }
+            }
+          }
+
+          // Fallback to local if remote not used or returned no links
+          if (!usedRemote) {
+            const uploaded = filesFromRequest.map(file => `/uploads/product-requests/${file.filename}`);
+            imageUrls = [...imageUrls, ...uploaded];
+          }
         }
 
         // Parse videos list if provided
         const videosParsed = parseList(videos);
 
         // Create product request
+        const primaryImage = image || (imageUrls && imageUrls.length ? imageUrls[0] : null);
         const productRequest = await ProductRequest.create({
           vendor_id: req.user.id,
           // store_id,
@@ -117,6 +191,7 @@ console.log(req.body);
           shipping_charges: shipping_charges || 0,
           shipping_included: toBool(shipping_included),
           images: imageUrls,
+          image: primaryImage,
           status: 'pending',
           // Extended optional fields (only set if provided)
           description, content, sku, order,
@@ -262,104 +337,187 @@ console.log(req.body);
    * @route PATCH /api/product-requests/:id
    */
   async updateProductRequest(req, res, next) {
-    try {
-      const { id } = req.params;
-      const vendorId = req.user.id;
-      
-      // Find the product request
-      const productRequest = await ProductRequest.findOne({
-        where: { 
-          id,
-          vendor_id: vendorId
-        }
-      });
-
-      if (!productRequest) {
-        return next(new AppError('Product request not found', 404));
+    // Parse files first to support images/images[] fields
+    upload(req, res, async function(err) {
+      if (err) {
+        return next(new AppError(err.message, 400));
       }
 
-      // Only allow updates if status is still pending
-      if (productRequest.status !== 'pending') {
-        return next(new AppError('Cannot update product request that has been processed by admin', 400));
+      try {
+        const { id } = req.params;
+        const vendorId = req.user.id;
+
+        // Find the product request
+        const productRequest = await ProductRequest.findOne({
+          where: { id, vendor_id: vendorId }
+        });
+
+        if (!productRequest) {
+          return next(new AppError('Product request not found', 404));
+        }
+
+        // Only allow updates if status is still pending
+        if (productRequest.status !== 'pending') {
+          return next(new AppError('Cannot update product request that has been processed by admin', 400));
+        }
+
+        // Update allowed fields
+        const { 
+          name, price, sale_price, quantity, shipping_charges, shipping_included,
+          description, content, sku, order,
+          allow_checkout_when_out_of_stock, with_storehouse_management, is_featured,
+          brand_id, is_variation, sale_type, start_date, end_date,
+          length, wide, height, weight, tax_id, views, stock_status, store_id,
+          created_by_id, created_by_type, approved_by, image, category, sub_category,
+          videos, purchase_price, hsn_sac_code, applicable_tax, unit, is_quotable
+        } = req.body;
+
+        // Helpers
+        const toBool = (v) => v === true || v === 'true' || v === 1 || v === '1';
+        const parseList = (val) => {
+          if (!val) return [];
+          if (Array.isArray(val)) return val;
+          try { return JSON.parse(val); } catch (_) {
+            if (typeof val === 'string') return val.split(',').map(s => s.trim()).filter(Boolean);
+            return [];
+          }
+        };
+
+        // Merge images from body and uploaded files via remote-first
+        const bodyImages = parseList(req.body.images);
+        const filesFromRequest = [];
+        if (req.files) {
+          if (Array.isArray(req.files)) {
+            filesFromRequest.push(...req.files);
+          } else {
+            if (req.files.images && req.files.images.length > 0) filesFromRequest.push(...req.files.images);
+            if (req.files['images[]'] && req.files['images[]'].length > 0) filesFromRequest.push(...req.files['images[]']);
+          }
+        }
+
+        let uploadedImageUrls = [];
+        if (filesFromRequest.length > 0) {
+          let usedRemote = false;
+          // Create shadow product to get a product ID for remote upload
+          let shadowProduct = null;
+          try {
+            const vendorIdLocal = req.user.id;
+            const store = await Store.findOne({ where: { customer_id: vendorIdLocal } });
+            const shadowData = {
+              name: productRequest.name || 'Request Image Holder',
+              description: productRequest.description || null,
+              content: productRequest.content || null,
+              price: productRequest.price || null,
+              sale_price: productRequest.sale_price || null,
+              quantity: productRequest.quantity || 0,
+              sku: productRequest.sku || null,
+              store_id: store ? store.id : null,
+              status: 'pending',
+              category: productRequest.category || null,
+              sub_category: productRequest.sub_category || null,
+              brand_id: productRequest.brand_id || null,
+              sale_type: productRequest.sale_type || null,
+              length: productRequest.length || null,
+              wide: productRequest.wide || null,
+              height: productRequest.height || null,
+              weight: productRequest.weight || null,
+              tax_id: productRequest.tax_id || null,
+              unit: productRequest.unit || null,
+              shipping_charges: productRequest.shipping_charges || 0,
+              shipping_included: !!productRequest.shipping_included,
+              created_at: new Date(),
+              updated_at: new Date()
+            };
+            shadowProduct = await Product.create(shadowData);
+          } catch (e) {
+            console.error('Failed to create shadow product for remote image upload (update):', e?.message || e);
+          }
+
+          if (shadowProduct && shadowProduct.id) {
+            const { linkList } = await uploadProductImagesToRemote(shadowProduct.id, filesFromRequest, req.headers);
+            if (linkList && linkList.length > 0) {
+              uploadedImageUrls = linkList;
+              usedRemote = true;
+              try {
+                await Product.update(
+                  { images: JSON.stringify(linkList), image: linkList[0] || null },
+                  { where: { id: shadowProduct.id } }
+                );
+              } catch (e) {
+                console.error('Failed to update shadow product images (update):', e?.message || e);
+              }
+            }
+          }
+
+          // Fallback to local storage if remote not used or returned no links
+          if (!usedRemote) {
+            uploadedImageUrls = filesFromRequest.map(file => `/uploads/product-requests/${file.filename}`);
+          }
+        }
+
+        // Merge with existing images
+        const existingImages = Array.isArray(productRequest.images) ? productRequest.images : [];
+        const mergedImages = Array.from(new Set([ ...existingImages, ...bodyImages, ...uploadedImageUrls ]));
+
+        // Primary image logic: explicit body image wins; otherwise first of merged
+        const primaryImage = image !== undefined ? image : (mergedImages.length ? mergedImages[0] : productRequest.image);
+
+        // Prepare update payload
+        const updatePayload = {
+          name: name !== undefined ? name : productRequest.name,
+          price: price !== undefined ? price : productRequest.price,
+          sale_price: sale_price !== undefined ? sale_price : productRequest.sale_price,
+          quantity: quantity !== undefined ? quantity : productRequest.quantity,
+          shipping_charges: shipping_charges !== undefined ? shipping_charges : productRequest.shipping_charges,
+          shipping_included: shipping_included !== undefined ? toBool(shipping_included) : productRequest.shipping_included,
+          // Extended optional fields
+          description: description !== undefined ? description : productRequest.description,
+          content: content !== undefined ? content : productRequest.content,
+          sku: sku !== undefined ? sku : productRequest.sku,
+          order: order !== undefined ? order : productRequest.order,
+          allow_checkout_when_out_of_stock: allow_checkout_when_out_of_stock !== undefined ? toBool(allow_checkout_when_out_of_stock) : productRequest.allow_checkout_when_out_of_stock,
+          with_storehouse_management: with_storehouse_management !== undefined ? toBool(with_storehouse_management) : productRequest.with_storehouse_management,
+          is_featured: is_featured !== undefined ? toBool(is_featured) : productRequest.is_featured,
+          brand_id: brand_id !== undefined ? brand_id : productRequest.brand_id,
+          is_variation: is_variation !== undefined ? toBool(is_variation) : productRequest.is_variation,
+          sale_type: sale_type !== undefined ? sale_type : productRequest.sale_type,
+          start_date: start_date !== undefined ? start_date : productRequest.start_date,
+          end_date: end_date !== undefined ? end_date : productRequest.end_date,
+          length: length !== undefined ? length : productRequest.length,
+          wide: wide !== undefined ? wide : productRequest.wide,
+          height: height !== undefined ? height : productRequest.height,
+          weight: weight !== undefined ? weight : productRequest.weight,
+          tax_id: tax_id !== undefined ? tax_id : productRequest.tax_id,
+          views: views !== undefined ? views : productRequest.views,
+          stock_status: stock_status !== undefined ? stock_status : productRequest.stock_status,
+          store_id: store_id !== undefined ? store_id : productRequest.store_id,
+          created_by_id: created_by_id !== undefined ? created_by_id : productRequest.created_by_id,
+          created_by_type: created_by_type !== undefined ? created_by_type : productRequest.created_by_type,
+          approved_by: approved_by !== undefined ? approved_by : productRequest.approved_by,
+          image: primaryImage,
+          category: category !== undefined ? category : productRequest.category,
+          sub_category: sub_category !== undefined ? sub_category : productRequest.sub_category,
+          videos: videos !== undefined ? parseList(videos) : productRequest.videos,
+          purchase_price: purchase_price !== undefined ? purchase_price : productRequest.purchase_price,
+          hsn_sac_code: hsn_sac_code !== undefined ? hsn_sac_code : productRequest.hsn_sac_code,
+          applicable_tax: applicable_tax !== undefined ? applicable_tax : productRequest.applicable_tax,
+          unit: unit !== undefined ? unit : productRequest.unit,
+          is_quotable: is_quotable !== undefined ? toBool(is_quotable) : productRequest.is_quotable,
+          images: mergedImages
+        };
+
+        await productRequest.update(updatePayload);
+
+        res.status(200).json({
+          status: 'success',
+          message: 'Product request updated successfully',
+          data: { productRequest }
+        });
+      } catch (error) {
+        console.error('Error updating product request:', error);
+        next(new AppError('Failed to update product request', 500));
       }
-
-      // Update allowed fields
-      const { 
-        name, price, sale_price, quantity, shipping_charges, shipping_included,
-        description, content, sku, order,
-        allow_checkout_when_out_of_stock, with_storehouse_management, is_featured,
-        brand_id, is_variation, sale_type, start_date, end_date,
-        length, wide, height, weight, tax_id, views, stock_status, store_id,
-        created_by_id, created_by_type, approved_by, image, category, sub_category,
-        videos, purchase_price, hsn_sac_code, applicable_tax, unit, is_quotable, images
-      } = req.body;
-
-      // Helpers
-      const toBool = (v) => v === true || v === 'true' || v === 1 || v === '1';
-      const parseList = (val) => {
-        if (!val) return [];
-        if (Array.isArray(val)) return val;
-        try { return JSON.parse(val); } catch (_) {
-          if (typeof val === 'string') return val.split(',').map(s => s.trim()).filter(Boolean);
-          return [];
-        }
-      };
-
-      // Update the product request
-      await productRequest.update({
-        name: name || productRequest.name,
-        price: price !== undefined ? price : productRequest.price,
-        sale_price: sale_price !== undefined ? sale_price : productRequest.sale_price,
-        quantity: quantity !== undefined ? quantity : productRequest.quantity,
-        shipping_charges: shipping_charges !== undefined ? shipping_charges : productRequest.shipping_charges,
-        shipping_included: shipping_included !== undefined ? toBool(shipping_included) : productRequest.shipping_included,
-        // Extended optional fields
-        description: description !== undefined ? description : productRequest.description,
-        content: content !== undefined ? content : productRequest.content,
-        sku: sku !== undefined ? sku : productRequest.sku,
-        order: order !== undefined ? order : productRequest.order,
-        allow_checkout_when_out_of_stock: allow_checkout_when_out_of_stock !== undefined ? toBool(allow_checkout_when_out_of_stock) : productRequest.allow_checkout_when_out_of_stock,
-        with_storehouse_management: with_storehouse_management !== undefined ? toBool(with_storehouse_management) : productRequest.with_storehouse_management,
-        is_featured: is_featured !== undefined ? toBool(is_featured) : productRequest.is_featured,
-        brand_id: brand_id !== undefined ? brand_id : productRequest.brand_id,
-        is_variation: is_variation !== undefined ? toBool(is_variation) : productRequest.is_variation,
-        sale_type: sale_type !== undefined ? sale_type : productRequest.sale_type,
-        start_date: start_date !== undefined ? start_date : productRequest.start_date,
-        end_date: end_date !== undefined ? end_date : productRequest.end_date,
-        length: length !== undefined ? length : productRequest.length,
-        wide: wide !== undefined ? wide : productRequest.wide,
-        height: height !== undefined ? height : productRequest.height,
-        weight: weight !== undefined ? weight : productRequest.weight,
-        tax_id: tax_id !== undefined ? tax_id : productRequest.tax_id,
-        views: views !== undefined ? views : productRequest.views,
-        stock_status: stock_status !== undefined ? stock_status : productRequest.stock_status,
-        store_id: store_id !== undefined ? store_id : productRequest.store_id,
-        created_by_id: created_by_id !== undefined ? created_by_id : productRequest.created_by_id,
-        created_by_type: created_by_type !== undefined ? created_by_type : productRequest.created_by_type,
-        approved_by: approved_by !== undefined ? approved_by : productRequest.approved_by,
-        image: image !== undefined ? image : productRequest.image,
-        category: category !== undefined ? category : productRequest.category,
-        sub_category: sub_category !== undefined ? sub_category : productRequest.sub_category,
-        videos: videos !== undefined ? parseList(videos) : productRequest.videos,
-        purchase_price: purchase_price !== undefined ? purchase_price : productRequest.purchase_price,
-        hsn_sac_code: hsn_sac_code !== undefined ? hsn_sac_code : productRequest.hsn_sac_code,
-        applicable_tax: applicable_tax !== undefined ? applicable_tax : productRequest.applicable_tax,
-        unit: unit !== undefined ? unit : productRequest.unit,
-        is_quotable: is_quotable !== undefined ? toBool(is_quotable) : productRequest.is_quotable,
-        images: images !== undefined ? parseList(images) : productRequest.images
-      });
-
-      res.status(200).json({
-        status: 'success',
-        message: 'Product request updated successfully',
-        data: {
-          productRequest
-        }
-      });
-    } catch (error) {
-      console.error('Error updating product request:', error);
-      next(new AppError('Failed to update product request', 500));
-    }
+    });
   },
 
   /**
