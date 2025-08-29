@@ -1,4 +1,8 @@
 const { Product } = require('../models/Product');
+const { ProductCollection } = require('../models/ProductCollection');
+const { ProductBrand } = require('../models/ProductBrand');
+const { ProductLabel } = require('../models/ProductLabel');
+const { Tax } = require('../models/Tax');
 const { Store } = require('../models/Store');
 const { ProductRequest } = require('../models/ProductRequest');
 const productSearchService = require('../services/productSearchService');
@@ -43,6 +47,66 @@ exports.upload = multer({
   { name: 'images', maxCount: 5 }, // Additional product images
   { name: 'videos', maxCount: 2 } // Product videos
 ]);
+
+exports.getTaxes = async (req, res, next) => {
+  try {
+    const taxes = await Tax.findAll();
+    
+    res.status(200).json({
+      status: 'success',
+      data: {
+        taxes
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.getLabels = async (req, res, next) => {
+  try {
+    const labels = await ProductLabel.findAll();
+    
+    res.status(200).json({
+      status: 'success',
+      data: {
+        labels
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.getBrands = async (req, res, next) => {
+  try {
+    const brands = await ProductBrand.findAll();
+    
+    res.status(200).json({
+      status: 'success',
+      data: {
+        brands
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.getProductCollections = async (req, res, next) => {
+  try {
+    const productCollections = await ProductCollection.findAll();
+    console.log(productCollections);
+    res.status(200).json({
+      status: 'success',
+      data: {
+        productCollections
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
 
 /**
  * Get all products
@@ -259,6 +323,8 @@ exports.createProduct = async (req, res, next) => {
     if (!price || !quantity) {
       return next(new AppError('Price and quantity are required fields', 400));
     }
+
+    console.log(catalogProduct);
     
     // Create the new product using catalog product details and vendor-specific information
     // Now we can include all fields including shipping fields
