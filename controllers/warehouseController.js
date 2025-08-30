@@ -8,7 +8,10 @@ const { Vendor } = require("../models/Vendor");
  */
 exports.getAllWarehouse = async (req, res, next) => {
   try {
-    const warehouse = await Warehouse.findAll();
+    const { id } = req.user;
+    const warehouse = await Warehouse.findAll({
+      where: { vendor_id: id },
+    });
 
     res.status(200).json({
       status: "success",

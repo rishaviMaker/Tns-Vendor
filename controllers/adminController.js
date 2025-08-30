@@ -77,6 +77,44 @@ exports.getAllVendors = async (req, res, next) => {
     }
 };
 
+exports.approveVendor = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const vendor = await Vendor.findByPk(id);
+        if (!vendor) {
+            return next(new AppError('Vendor not found', 404));
+        }
+        const updatedVendor = await vendor.update({ isVerified: true });
+        res.status(200).json({
+            status: "success",
+            data: {
+                vendor: updatedVendor
+            }
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+exports.rejectVendor = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const vendor = await Vendor.findByPk(id);
+        if (!vendor) {
+            return next(new AppError('Vendor not found', 404));
+        }
+        const updatedVendor = await vendor.update({ isVerified: false });
+        res.status(200).json({
+            status: "success",
+            data: {
+                vendor: updatedVendor
+            }
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
 exports.getVendor = async (req, res, next) => {
     try {
         const { id } = req.params;

@@ -22,9 +22,6 @@ async function uploadProductImagesToRemote(productId, files, reqHeaders = {}) {
     const base = 'https://thenirmanstore.com/api';
     const url = `${base.replace(/\/$/, '')}/products/${productId}/upload-images`;
 
-    console.log('Uploading images to remote for product ID:', productId);
-    console.log(base);
-    console.log(url);
     const form = new FormData();
 
     for (const file of files) {
@@ -32,6 +29,7 @@ async function uploadProductImagesToRemote(productId, files, reqHeaders = {}) {
       if (!fullPath || !fs.existsSync(fullPath)) continue;
       // Use originalname when available so remote receives a nicer filename
       form.append('images[]', fs.createReadStream(fullPath), file.originalname || file.filename);
+      form.append('type', 'request');
     }
 
     const headers = { ...form.getHeaders() };
