@@ -60,13 +60,6 @@ const swaggerOptions = {
     docExpansion: 'list'
   }
 };
-
-console.log('Swagger configured with paths:', {
-  routesPath,
-  modelsPath,
-  componentsPath
-});
-
 // Initialize swagger-jsdoc
 const swaggerSpec = swaggerJsDoc(swaggerOptions);
 

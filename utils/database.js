@@ -39,7 +39,7 @@ const initDatabase = async (force = false) => {
       await createSampleData();
     } else {
       console.log('Syncing database without dropping existing tables');
-      await sequelize.sync();
+      // await sequelize.sync();
       console.log('Database synchronized successfully');
     }
     

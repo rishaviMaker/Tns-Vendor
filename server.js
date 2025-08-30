@@ -5,24 +5,15 @@ const { initDatabase } = require('./utils/database');
 // Load environment variables
 dotenv.config();
 
-const PORT = process.env.PORT || 6000; // Set default port to 6000 to match Swagger configuration
+const isProd = process.env.NODE_ENV === 'production';
+const PORT = isProd ? process.env.PROD_PORT : process.env.PORT || process.env.DEV_PORT; // Set default port to 6000 to match Swagger configuration
 
 // Initialize the database
 const startServer = async () => {
   try {
-    // Initialize database
-    // Pass true to force sync (drop tables and recreate) - use only in development
-    const force = process.env.NODE_ENV === 'development' && process.env.DB_FORCE_SYNC === 'true';
-    const dbInitialized = await initDatabase(force);
-    
-    if (!dbInitialized) {
-      console.error('Failed to initialize database. Exiting...');
-      process.exit(1);
-    }
-    
     // Start the server
     app.listen(PORT, () => {
-      console.log(`Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
+      console.log(`Server running in ${isProd ? 'production' : 'development'} mode on port ${PORT}`);
     });
   } catch (error) {
     console.error('Error starting server:', error);
