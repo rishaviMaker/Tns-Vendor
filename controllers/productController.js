@@ -394,7 +394,7 @@ exports.createProduct = async (req, res, next) => {
         let remoteUploaded = false;
         if (candidateImages.length > 0) {
           console.log(`Attempting remote upload of ${candidateImages.length} image(s) for product ${newProduct.id}`);
-          const { linkList } = await uploadProductImagesToRemote(newProduct.id, candidateImages, req.headers);
+          const { linkList } = await uploadProductImagesToRemote(newProduct.id, candidateImages, 'product', req.headers);
           if (linkList && linkList.length > 0) {
             await Product.update(
               { images: JSON.stringify(linkList), image: linkList[0] || null },
@@ -551,7 +551,7 @@ exports.updateProduct = async (req, res, next) => {
     let newImageLinks = [];
     if (candidateImages.length > 0) {
       try {
-        const { linkList } = await uploadProductImagesToRemote(product.id, candidateImages, req.headers);
+        const { linkList } = await uploadProductImagesToRemote(product.id, candidateImages, 'product', req.headers);
         if (linkList && linkList.length > 0) {
           newImageLinks = linkList;
         } else {
