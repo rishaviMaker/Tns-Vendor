@@ -15,7 +15,7 @@ const path = require('path');
  * @param {Object} reqHeaders - Incoming request headers (to forward Authorization if available)
  * @returns {Promise<{ linkList: string[], raw?: any, error?: any }>} List of URL strings on success
  */
-async function uploadProductImagesToRemote(productId, files, reqHeaders = {}) {
+async function uploadProductImagesToRemote(productId, files, type, reqHeaders = {}) {
   try {
     if (!files || files.length === 0) return { linkList: [] };
 
@@ -29,7 +29,7 @@ async function uploadProductImagesToRemote(productId, files, reqHeaders = {}) {
       if (!fullPath || !fs.existsSync(fullPath)) continue;
       // Use originalname when available so remote receives a nicer filename
       form.append('images[]', fs.createReadStream(fullPath), file.originalname || file.filename);
-      form.append('type', 'request');
+      form.append('type', type);
     }
 
     const headers = { ...form.getHeaders() };

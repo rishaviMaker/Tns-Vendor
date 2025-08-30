@@ -150,7 +150,7 @@ const productRequestController = {
         if (filesFromRequest.length > 0) {
           let finalImages = bodyImageUrls.slice();
           try {
-            const { linkList } = await uploadProductImagesToRemote(productRequest.id, filesFromRequest, req.headers);
+            const { linkList } = await uploadProductImagesToRemote(productRequest.id, filesFromRequest, 'product-request', req.headers);
             if (linkList && linkList.length > 0) {
               finalImages = [...finalImages, ...linkList];
             } else {
@@ -370,7 +370,7 @@ const productRequestController = {
 
           if (remoteId) {
             try {
-              const { linkList } = await uploadProductImagesToRemote(remoteId, filesFromRequest, req.headers);
+              const { linkList } = await uploadProductImagesToRemote(remoteId, filesFromRequest, 'product-request', req.headers);
               if (linkList && linkList.length > 0) {
                 uploadedImageUrls = linkList;
                 usedRemote = true;
