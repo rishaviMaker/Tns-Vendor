@@ -19,9 +19,12 @@ async function uploadProductImagesToRemote(productId, files, reqHeaders = {}) {
   try {
     if (!files || files.length === 0) return { linkList: [] };
 
-    const base = process.env.REMOTE_PRODUCT_BASE_URL || 'https://thenirmanstore.com/api';
+    const base = 'https://thenirmanstore.com/api';
     const url = `${base.replace(/\/$/, '')}/products/${productId}/upload-images`;
 
+    console.log('Uploading images to remote for product ID:', productId);
+    console.log(base);
+    console.log(url);
     const form = new FormData();
 
     for (const file of files) {
