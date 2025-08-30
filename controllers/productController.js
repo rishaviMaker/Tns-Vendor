@@ -551,7 +551,7 @@ exports.updateProduct = async (req, res, next) => {
     let newImageLinks = [];
     if (candidateImages.length > 0) {
       try {
-        const { linkList } = await uploadProductImagesToRemote(product.id, candidateImages, req.headers);
+        const { linkList } = await uploadProductImagesToRemote(product.id, candidateImages, 'product', req.headers);
         if (linkList && linkList.length > 0) {
           newImageLinks = linkList;
         } else {
