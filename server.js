@@ -1,6 +1,6 @@
 const app = require('./app');
 const dotenv = require('dotenv');
-const { initDatabase } = require('./utils/database');
+// const { initDatabase } = require('./utils/database');
 
 // Load environment variables
 dotenv.config();

@@ -11,8 +11,8 @@ exports.getNotifications = async (req, res, next) => {
   try {
     // Make sure we have a vendor from the authentication middleware
     const vendorId = req.user.id;
-    console.log("vendorId", vendorId);
-    console.log("request", req.path);
+    // console.log("vendorId", vendorId);
+    // console.log("request", req.path);
     
     if (!req.user || !req.user.id) {
       return next(new AppError('Authentication required. Please login.', 401));

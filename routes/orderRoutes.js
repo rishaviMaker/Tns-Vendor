@@ -112,7 +112,7 @@ const router = express.Router();
  *       500:
  *         $ref: '#/components/responses/ServerError'
  */
-router.get('/store/:storeId', authenticate, orderController.getOrdersByStoreId);
+router.get('/store', authenticate, orderController.getOrdersByStoreId);
 
 /**
  * @swagger

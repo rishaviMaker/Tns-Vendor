@@ -1,4 +1,5 @@
 const { Order } = require('../models/Order');
+const { Store } = require('../models/Store');
 const catchAsync = require('../utils/catchAsync');
 const AppError = require('../utils/AppError');
 const { sequelize } = require('../config/db');
@@ -63,22 +64,17 @@ const calculateOrderPaymentSummary = (order, products = []) => {
  */
 exports.getOrdersByStoreId = async (req, res, next) => {
   try {
-    const { storeId } = req.params;
-    
-    // Validate storeId
-    if (!storeId || isNaN(parseInt(storeId))) {
-      return next(new AppError('Valid store ID is required', 400));
+    const { id } = req.user;
+    const store = await Store.findOne({ where: { customer_id: id } });
+    if (!store) {
+      return next(new AppError('Store not found', 404));
     }
+    const storeIdNum = parseInt(store.id, 10);
     
-    const storeIdNum = parseInt(storeId, 10);
-    console.log(`Querying orders for store_id: ${storeIdNum} (type: ${typeof storeIdNum})`);
-    
-    // Try with a direct SQL query first to verify database connectivity
     try {
       const [rawOrders] = await sequelize.query(
         `SELECT * FROM ec_orders WHERE store_id = ${storeIdNum} ORDER BY created_at DESC LIMIT 50`
       );
-      console.log(`Raw SQL query found ${rawOrders.length} orders`);
       
       // Import models needed for detailed product information
       const { OrderProduct } = require('../models/OrderProduct');
@@ -92,17 +88,12 @@ exports.getOrdersByStoreId = async (req, res, next) => {
         limit: 50
       });
       
-      console.log(`Sequelize ORM found ${orders.length} orders`);
-      
-      // Fetch product data and payments for all orders to calculate accurate payment summaries
       const orderIds = orders.map(order => order.id);
       
-      // Fetch all order products in a single query
       const allOrderProducts = await OrderProduct.findAll({
         where: { order_id: orderIds }
       });
       
-      // Group products by order_id
       const productsByOrder = {};
       allOrderProducts.forEach(product => {
         if (!productsByOrder[product.order_id]) {
@@ -111,25 +102,21 @@ exports.getOrdersByStoreId = async (req, res, next) => {
         productsByOrder[product.order_id].push(product);
       });
       
-      // Fetch all products for enrichment
       const productIds = allOrderProducts.map(op => op.product_id);
       const products = await Product.findAll({
         where: { id: productIds },
         attributes: ['id', 'name', 'description', 'sku', 'images', 'image', 'price', 'sale_price', 'stock_status', 'quantity']
       });
       
-      // Create a map for easy product lookup
       const productMap = {};
       products.forEach(product => {
         productMap[product.id] = product;
       });
       
-      // Fetch payments for all orders
       const payments = await Payment.findAll({
         where: { order_id: orderIds }
       });
       
-      // Create a map for easy payment lookup
       const paymentMap = {};
       payments.forEach(payment => {
         paymentMap[payment.order_id] = payment;

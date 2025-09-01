@@ -17,7 +17,7 @@ const dashboardController = {
   async getVendorDashboard(req, res, next) {
     try {
       const vendorId = req.user.id;
-      console.log(vendorId);
+      // console.log(vendorId);
       // Find the store associated with this vendor
       const store = await Store.findOne({
         where: { customer_id: vendorId },
@@ -79,8 +79,8 @@ const dashboardController = {
       const currentBalance = totalRevenue - totalWithdrawals - totalFees;
       
       // Get revenue data for last 30 days - for graph
-      console.log('Fetching revenue data for vendor ID:', vendorId);
-      console.log('Date range:', last30Days, 'to', new Date());
+      // console.log('Fetching revenue data for vendor ID:', vendorId);
+      // console.log('Date range:', last30Days, 'to', new Date());
       
       // Check if there are any payments for this vendor
       const paymentsCount = await Payment.count({
@@ -89,7 +89,7 @@ const dashboardController = {
         }
       });
       
-      console.log('Total payments for this vendor:', paymentsCount);
+      // console.log('Total payments for this vendor:', paymentsCount);
       
       const dailyRevenue = await Payment.findAll({
         attributes: [
@@ -108,7 +108,7 @@ const dashboardController = {
         order: [[sequelize.fn('DATE', sequelize.col('created_at')), 'ASC']]
       });
       
-      console.log('Daily revenue results:', dailyRevenue.length);
+      // console.log('Daily revenue results:', dailyRevenue.length);
       
       // Generate an array of all days in the last 30 days
       const allDays = [];
@@ -138,7 +138,7 @@ const dashboardController = {
         revenue: revenueMap.get(day.date) || '0.00'
       }));
       
-      console.log('Final sales chart data points:', salesChartData.length);
+      // console.log('Final sales chart data points:', salesChartData.length);
       
       // Get payment data by status (for pie chart)
       const paymentsByStatus = await Payment.findAll({

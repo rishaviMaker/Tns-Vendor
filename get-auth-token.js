@@ -22,12 +22,12 @@ const credentials = {
 // Function to get auth token
 async function getAuthToken() {
   try {
-    console.log('Attempting to login and get auth token...');
+    // console.log('Attempting to login and get auth token...');
     const response = await api.post('/vendors/login', credentials);
     
     if (response.data.status === 'success' && response.data.token) {
-      console.log('Authentication successful!');
-      console.log('Token:', response.data.token);
+      // console.log('Authentication successful!');
+      // console.log('Token:', response.data.token);
       return response.data.token;
     } else {
       console.error('Authentication failed:', response.data);
