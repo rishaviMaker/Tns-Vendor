@@ -19,7 +19,8 @@ async function uploadProductImagesToRemote(productId, files, type, reqHeaders = 
   try {
     if (!files || files.length === 0) return { linkList: [] };
 
-    const base = 'http://127.0.0.1:8000/api';
+    const isProd = process.env.NODE_ENV === 'production';
+    const base = isProd ? 'https://thenirmanstore.com/api' : 'http://127.0.0.1:8000/api';
     const url = `${base.replace(/\/$/, '')}/products/${productId}/upload-images`;
 
     const form = new FormData();
