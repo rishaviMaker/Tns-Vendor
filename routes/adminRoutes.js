@@ -6,8 +6,9 @@ const router = express.Router();
 
 router.post('/login', adminController.login);
 router.get('/all-vendors', authenticate, adminController.getAllVendors);
-router.get('/vendor/:id/approve', authenticate, adminController.approveVendor);
-router.get('/vendor/:id/reject', authenticate, adminController.rejectVendor);
+router.put('/vendor/:id/approve', authenticate, adminController.approveVendor);
+router.put('/vendor/:id/reject', authenticate, adminController.rejectVendor);
+router.post('/vendor/create', authenticate, adminController.createVendor);
 router.get('/all-product-requests', authenticate, adminController.getAllProductRequests);
 router.get('/all-products', authenticate, adminController.getAllProducts);
 router.get('/product/:id', authenticate, adminController.getProduct);

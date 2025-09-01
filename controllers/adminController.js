@@ -84,11 +84,33 @@ exports.approveVendor = async (req, res, next) => {
         if (!vendor) {
             return next(new AppError('Vendor not found', 404));
         }
-        const updatedVendor = await vendor.update({ isVerified: true });
+        const updatedVendor = await vendor.update({ isVerified: true, status: 'approved' });
         res.status(200).json({
             status: "success",
+            message: "Vendor approved successfully",
             data: {
                 vendor: updatedVendor
+            }
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+exports.createVendor = async (req, res, next) => {
+    try {
+        const { email, password, businessType, mobileNumber } = req.body;
+        if (!email || !password || !businessType || !mobileNumber) {
+            return res.status(400).json({
+                status: "fail",
+                message: "email, password, businessType, and mobileNumber are required"
+            });
+        }
+        const vendor = await Vendor.create(req.body);
+        res.status(201).json({
+            status: "success",
+            data: {
+                vendor
             }
         });
     } catch (error) {
@@ -103,9 +125,10 @@ exports.rejectVendor = async (req, res, next) => {
         if (!vendor) {
             return next(new AppError('Vendor not found', 404));
         }
-        const updatedVendor = await vendor.update({ isVerified: false });
+        const updatedVendor = await vendor.update({ isVerified: false, status: 'rejected' });
         res.status(200).json({
             status: "success",
+            message: "Vendor rejected successfully",
             data: {
                 vendor: updatedVendor
             }
