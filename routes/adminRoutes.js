@@ -19,5 +19,6 @@ router.put('/product-request/:id/reject', authenticate, adminController.RejectPr
 router.delete('/product-request/:id', authenticate, adminController.DeleteProductRequest);
 router.delete('/product/:id', authenticate, adminController.DeleteProduct);
 router.put('/product/:id', authenticate, adminController.updateProduct);
+router.post('/product/create', authenticate, adminController.createProduct);
 
 module.exports = router;

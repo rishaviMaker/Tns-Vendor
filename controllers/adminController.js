@@ -3,7 +3,10 @@ const { Product } = require("../models/Product");
 const { ProductRequest } = require("../models/ProductRequest");
 const { Vendor } = require("../models/Vendor");
 const bcrypt = require("bcryptjs");
+const AppError = require("../utils/AppError");
 const jwt = require("jsonwebtoken");
+const cashfreeService = require("../services/cashfreeService");
+const { Store } = require('../models/Store');
 
 //Auth Controller
 exports.login = async (req, res, next) => {
@@ -238,96 +241,96 @@ exports.createVendor = async (req, res, next) => {
     let isGstinVerified = false;
     let isVoterIdVerified = false;
 
-    try {
-      // Verify PAN if provided
-      if (panNumber) {
-        const panVerification = await cashfreeService.verifyPAN(
-          panNumber,
-          fullName
-        );
-        isPanVerified = panVerification.verified;
-        kycVerificationData.pan = panVerification;
+    // try {
+    //   // Verify PAN if provided
+    //   if (panNumber) {
+    //     const panVerification = await cashfreeService.verifyPAN(
+    //       panNumber,
+    //       fullName
+    //     );
+    //     isPanVerified = panVerification.verified;
+    //     kycVerificationData.pan = panVerification;
 
-        // If PAN verification fails, we'll still create the account but mark it unverified
-        if (!isPanVerified) {
-          console.log(
-            `PAN verification failed for ${panNumber}:`,
-            panVerification.message
-          );
-        }
-      }
+    //     // If PAN verification fails, we'll still create the account but mark it unverified
+    //     if (!isPanVerified) {
+    //       console.log(
+    //         `PAN verification failed for ${panNumber}:`,
+    //         panVerification.message
+    //       );
+    //     }
+    //   }
 
-      // Verify Aadhaar if that's the ID proof type
-      if (idProofType === "Aadhar Card" && idProofNumber) {
-        const aadharVerification = await cashfreeService.verifyAadhaar(
-          idProofNumber,
-          fullName
-        );
-        isAadharVerified = aadharVerification.verified;
-        kycVerificationData.aadhar = aadharVerification;
+    //   // Verify Aadhaar if that's the ID proof type
+    //   if (idProofType === "Aadhar Card" && idProofNumber) {
+    //     const aadharVerification = await cashfreeService.verifyAadhaar(
+    //       idProofNumber,
+    //       fullName
+    //     );
+    //     isAadharVerified = aadharVerification.verified;
+    //     kycVerificationData.aadhar = aadharVerification;
 
-        if (!isAadharVerified) {
-          console.log(
-            `Aadhaar verification failed for ${idProofNumber}:`,
-            aadharVerification.message
-          );
-        }
-      }
+    //     if (!isAadharVerified) {
+    //       console.log(
+    //         `Aadhaar verification failed for ${idProofNumber}:`,
+    //         aadharVerification.message
+    //       );
+    //     }
+    //   }
 
-      // Verify Driving License if that's the ID proof type
-      if (idProofType === "Driving License" && idProofNumber) {
-        const dlVerification = await cashfreeService.verifyDL(
-          idProofNumber,
-          dob
-        );
-        isDlVerified = dlVerification.verified;
-        kycVerificationData.dl = dlVerification;
+    //   // Verify Driving License if that's the ID proof type
+    //   if (idProofType === "Driving License" && idProofNumber) {
+    //     const dlVerification = await cashfreeService.verifyDL(
+    //       idProofNumber,
+    //       dob
+    //     );
+    //     isDlVerified = dlVerification.verified;
+    //     kycVerificationData.dl = dlVerification;
 
-        if (!isDlVerified) {
-          console.log(
-            `DL verification failed for ${idProofNumber}:`,
-            dlVerification.message
-          );
-        }
-      }
+    //     if (!isDlVerified) {
+    //       console.log(
+    //         `DL verification failed for ${idProofNumber}:`,
+    //         dlVerification.message
+    //       );
+    //     }
+    //   }
 
-      // Verify Voter ID if that's the ID proof type
-      if (idProofType === "Voter ID" && idProofNumber) {
-        const voterIdVerification = await cashfreeService.verifyVoterId(
-          idProofNumber,
-          { name: fullName }
-        );
-        isVoterIdVerified = voterIdVerification.verified;
-        kycVerificationData.voterId = voterIdVerification;
+    //   // Verify Voter ID if that's the ID proof type
+    //   if (idProofType === "Voter ID" && idProofNumber) {
+    //     const voterIdVerification = await cashfreeService.verifyVoterId(
+    //       idProofNumber,
+    //       { name: fullName }
+    //     );
+    //     isVoterIdVerified = voterIdVerification.verified;
+    //     kycVerificationData.voterId = voterIdVerification;
 
-        if (!isVoterIdVerified) {
-          console.log(
-            `Voter ID verification failed for ${idProofNumber}:`,
-            voterIdVerification.message
-          );
-        }
-      }
+    //     if (!isVoterIdVerified) {
+    //       console.log(
+    //         `Voter ID verification failed for ${idProofNumber}:`,
+    //         voterIdVerification.message
+    //       );
+    //     }
+    //   }
 
-      // Verify GSTIN if provided
-      if (gstinNumber) {
-        const gstinVerification = await cashfreeService.verifyGSTIN(
-          gstinNumber
-        );
-        isGstinVerified = gstinVerification.verified;
-        kycVerificationData.gstin = gstinVerification;
+    //   // Verify GSTIN if provided
+    //   if (gstinNumber) {
+    //     const gstinVerification = await cashfreeService.verifyGSTIN(
+    //       gstinNumber
+    //     );
+    //     isGstinVerified = gstinVerification.verified;
+    //     kycVerificationData.gstin = gstinVerification;
 
-        if (!isGstinVerified) {
-          console.log(
-            `GSTIN verification failed for ${gstinNumber}:`,
-            gstinVerification.message
-          );
-        }
-      }
-    } catch (error) {
-      console.error("Error during KYC verification:", error);
-      // We'll continue with registration even if verification fails
-      // The message in the response will indicate there was an issue
-    }
+    //     if (!isGstinVerified) {
+    //       console.log(
+    //         `GSTIN verification failed for ${gstinNumber}:`,
+    //         gstinVerification.message
+    //       );
+    //     }
+    //   }
+    // } catch (error) {
+    //   console.error("Error during KYC verification:", error);
+    //   // We'll continue with registration even if verification fails
+    //   // The message in the response will indicate there was an issue
+    // }
 
     // Hash password
     const salt = await bcrypt.genSalt(10);
@@ -396,7 +399,7 @@ exports.createVendor = async (req, res, next) => {
       established_year: establishedYear,
       gstin: gstinNumber,
       pan: panNumber,
-      business_type: businessType,
+      businessType,
       description: "",
       status: "pending",
       vendor_verified_at: null,
@@ -409,35 +412,35 @@ exports.createVendor = async (req, res, next) => {
     delete vendorResponse.password;
 
     // Build a detailed response message about verification status
-    let verificationMessage = "";
+    // let verificationMessage = "";
 
-    if (panNumber && !isPanVerified) {
-      verificationMessage += "PAN verification failed. ";
-    }
+    // if (panNumber && !isPanVerified) {
+    //   verificationMessage += "PAN verification failed. ";
+    // }
 
-    if (idProofType === "Aadhar Card" && idProofNumber && !isAadharVerified) {
-      verificationMessage += "Aadhaar verification failed. ";
-    }
+    // if (idProofType === "Aadhar Card" && idProofNumber && !isAadharVerified) {
+    //   verificationMessage += "Aadhaar verification failed. ";
+    // }
 
-    if (idProofType === "Driving License" && idProofNumber && !isDlVerified) {
-      verificationMessage += "Driving License verification failed. ";
-    }
+    // if (idProofType === "Driving License" && idProofNumber && !isDlVerified) {
+    //   verificationMessage += "Driving License verification failed. ";
+    // }
 
-    if (gstinNumber && !isGstinVerified) {
-      verificationMessage += "GSTIN verification failed. ";
-    }
+    // if (gstinNumber && !isGstinVerified) {
+    //   verificationMessage += "GSTIN verification failed. ";
+    // }
 
-    if (verificationMessage) {
-      fullMessage +=
-        verificationMessage +
-        "Please ensure your documents are valid or contact support.";
-    } else if (Object.keys(kycVerificationData).length > 0) {
-      fullMessage += "All provided documents were successfully verified.";
-    }
+    // if (verificationMessage) {
+    //   fullMessage +=
+    //     verificationMessage +
+    //     "Please ensure your documents are valid or contact support.";
+    // } else if (Object.keys(kycVerificationData).length > 0) {
+    //   fullMessage += "All provided documents were successfully verified.";
+    // }
     
     res.status(201).json({
       status: "success",
-      message: fullMessage,
+      // message: fullMessage,
       data: {
         vendor: vendorResponse,
         store: store,
@@ -501,11 +504,30 @@ exports.getVendor = async (req, res, next) => {
 exports.updateVendor = async (req, res, next) => {
   try {
     const { id } = req.params;
+   
     const vendor = await Vendor.findByPk(id);
     if (!vendor) {
       return next(new AppError("Vendor not found", 404));
     }
-    const updatedVendor = await vendor.update(req.body);
+
+    console.log(req.body);
+    const updatedVendor = await vendor.update({
+      fullName: req.body.fullName,
+      businessType: req.body.businessType,
+      alternativeMobileNumber: req.body.alternativeMobileNumber,
+      position: req.body.position,
+      companyName: req.body.companyName,
+      establishedYear: req.body.establishedYear,
+      shopPhoneNumber: req.body.shopPhoneNumber,
+      street: req.body.street,
+      city: req.body.city,
+      state: req.body.state,
+      postalCode: req.body.postalCode,
+      country: req.body.country || "India",
+      status: req.body.status || "published",
+    }); 
+
+    console.log(updatedVendor);
     res.status(200).json({
       status: "success",
       data: {
@@ -697,6 +719,142 @@ exports.updateProduct = async (req, res, next) => {
         product: updatedProduct,
       },
     });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.createProduct = async (req, res, next) => {
+  try {
+    const {
+      price, // MRP
+      sale_price, // Discounted price
+      quantity,
+      shipping_charges, // Shipping charges in INR
+      shipping_included, // Whether shipping cost is included in price
+      status = 'pending', // Default status is pending
+    } = req.body;
+    
+  
+    const productData = {
+      name: req.body.name,
+      description: req.body.description,
+      content: req.body.content,
+      price: parseFloat(price), // MRP
+      sale_price: sale_price ? parseFloat(sale_price) : null, // Discounted price
+      quantity: parseInt(quantity),
+      sku: req.body.sku,
+      store_id: req.body.store_id,
+      status,
+      is_variation: false, // Not handling variations in this simplified flow
+      category: req.body.category,
+      sub_category: req.body.sub_category,
+      brand_id: req.body.brand_id,
+      sale_type: req.body.sale_type,
+      length: req.body.length,
+      wide: req.body.wide,
+      height: req.body.height,
+      weight: req.body.weight,
+      tax_id: req.body.tax_id,
+      is_featured: req.body.is_featured || false,
+      unit: req.body.unit,
+      shipping_charges: shipping_charges || 0,
+      shipping_included: shipping_included === 'true' || shipping_included === true ? true : false,
+      created_at: new Date(),
+      updated_at: new Date()
+    };
+    
+    let newProduct;
+    
+    try {
+      newProduct = await Product.create(productData);
+      console.log('Product created successfully with ID:', newProduct.id);
+      
+      if (req.files) {
+        const candidateImages = [];
+        if (req.files.image && req.files.image.length > 0) {
+          candidateImages.push(...req.files.image);
+        }
+        if (req.files.images && req.files.images.length > 0) {
+          candidateImages.push(...req.files.images);
+        }
+        if (req.files['images[]'] && req.files['images[]'].length > 0) {
+          candidateImages.push(...req.files['images[]']);
+        }
+
+        let remoteUploaded = false;
+        if (candidateImages.length > 0) {
+          console.log(`Attempting remote upload of ${candidateImages.length} image(s) for product ${newProduct.id}`);
+          const { linkList } = await uploadProductImagesToRemote(newProduct.id, candidateImages, 'product', req.headers);
+          if (linkList && linkList.length > 0) {
+            await Product.update(
+              { images: JSON.stringify(linkList), image: linkList[0] || null },
+              { where: { id: newProduct.id } }
+            );
+            newProduct.images = JSON.stringify(linkList);
+            newProduct.image = linkList[0] || null;
+            remoteUploaded = true;
+          } else {
+            console.warn('Remote upload returned no links; falling back to local paths');
+          }
+        }
+
+        // Fallback to existing local behavior for images if remote failed or no files
+        if (!remoteUploaded) {
+          const localImages = [];
+          if (req.files.image && req.files.image.length > 0) {
+            localImages.push(...req.files.image.map(file => `/uploads/products/${file.filename}`));
+          }
+          if (req.files.images && req.files.images.length > 0) {
+            localImages.push(...req.files.images.map(file => `/uploads/products/${file.filename}`));
+          }
+          if (req.files['images[]'] && req.files['images[]'].length > 0) {
+            localImages.push(...req.files['images[]'].map(file => `/uploads/products/${file.filename}`));
+          }
+          if (localImages.length > 0) {
+            console.log(`Processing ${localImages.length} additional images (local fallback)`);
+            await Product.update(
+              { images: JSON.stringify(localImages), image: localImages[0] || null },
+              { where: { id: newProduct.id } }
+            );
+            newProduct.images = JSON.stringify(localImages);
+            newProduct.image = localImages[0] || null;
+          }
+        }
+        
+        // Handle videos (unchanged)
+        if (req.files.videos && req.files.videos.length > 0) {
+          console.log(`Processing ${req.files.videos.length} videos`);
+          const videos = req.files.videos.map(file => `/uploads/products/${file.filename}`);
+          await Product.update(
+            { videos: JSON.stringify(videos) },
+            { where: { id: newProduct.id } }
+          );
+          newProduct.videos = JSON.stringify(videos);
+        }
+      }
+      
+      // Return success response
+      return res.status(201).json({
+        status: 'success',
+        message: 'Product created successfully',
+        data: {
+          product: newProduct,
+          catalog_source: {
+            id: newProduct.id,
+            name: newProduct.name,
+            brand: newProduct.brand
+          },
+          shipping_info: {
+            shipping_charges: newProduct.shipping_charges,
+            shipping_included: newProduct.shipping_included
+          } // Include shipping info from the saved product
+        }
+      });
+    } catch (error) {
+      console.error('Error during product creation process:', error);
+      return next(new AppError(`Failed to create product: ${error.message}`, 500));
+    }
   } catch (error) {
     next(error);
   }
