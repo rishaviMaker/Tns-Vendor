@@ -2,6 +2,8 @@ const { Product } = require('../models/Product');
 const { ProductCollection } = require('../models/ProductCollection');
 const { ProductBrand } = require('../models/ProductBrand');
 const { ProductLabel } = require('../models/ProductLabel');
+const { ProductCollectionProduct } = require('../models/ProductCollectionProduct');
+const { ProductLabelsProduct } = require('../models/ProductLabelsProduct');
 const { Tax } = require('../models/Tax');
 const { Store } = require('../models/Store');
 const { ProductRequest } = require('../models/ProductRequest');
@@ -11,6 +13,7 @@ const { uploadProductImagesToRemote } = require('../services/remoteImageService'
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const { ProductCategoryProduct } = require('../models/ProductCategoryProduct');
 
 // Common attribute whitelist used when fetching catalog product details
 const safeAttributes = [
@@ -237,6 +240,114 @@ exports.getProductsByStore = async (req, res, next) => {
   }
 };
 
+
+exports.createAdminProduct = async (req, res, next) => {
+  try {
+    const {
+      name, price, sale_price, quantity,
+      shipping_charges, shipping_included,
+      description, content, sku, store_id,
+      category, sub_category, brand_id, sale_type,
+      length, wide, height, weight, tax_id,
+      is_featured, unit, warehouse_id,category_id,collections,labels
+    } = req.body;
+
+    if (!name) return next(new AppError("Product name is required", 400));
+    if (!price) return next(new AppError("Product price is required", 400));
+    if (!quantity) return next(new AppError("Product quantity is required", 400));
+
+    const toBool = (v) => v === true || v === 'true' || v === 1 || v === '1';
+    const parseList = (val) => {
+      if (!val) return [];
+      if (Array.isArray(val)) return val;
+      try { return JSON.parse(val); } catch (_) {
+        if (typeof val === "string") return val.split(",").map(s => s.trim()).filter(Boolean);
+        return [];
+      }
+    };
+
+    // Gather images provided in body (if any)
+    const bodyImageUrls = parseList(req.body.images);
+
+    // Create base product
+    const productData = {
+      name,
+      description,
+      content,
+      price: parseFloat(price),
+      sale_price: sale_price ? parseFloat(sale_price) : null,
+      quantity: parseInt(quantity),
+      sku,
+      store_id,
+      status: "published",
+      is_variation: false,
+      brand_id,
+      sale_type,
+      length, wide, height, weight, tax_id,
+      is_featured: toBool(is_featured),
+      unit,
+      warehouse_id,
+      shipping_charges: shipping_charges || 0,
+      shipping_included: toBool(shipping_included),
+      created_at: new Date(),
+      updated_at: new Date(),
+      images: JSON.stringify(bodyImageUrls),
+      image: bodyImageUrls.length ? bodyImageUrls[0] : null
+    };
+
+    let newProduct = await Product.create(productData);
+    
+    // Collect uploaded files
+    const filesFromRequest = [];
+    if (req.files) {
+      if (Array.isArray(req.files)) {
+        filesFromRequest.push(...req.files);
+      } else {
+        if (req.files.images && req.files.images.length > 0) filesFromRequest.push(...req.files.images);
+        if (req.files["images[]"] && req.files["images[]"].length > 0) filesFromRequest.push(...req.files["images[]"]);
+        if (req.files.image && req.files.image.length > 0) filesFromRequest.push(...req.files.image);
+      }
+    }
+
+    // Upload to remote if files exist
+    if (filesFromRequest.length > 0) {
+      let finalImages = [...bodyImageUrls];
+      try {
+        const { linkList } = await uploadProductImagesToRemote(newProduct.id, filesFromRequest, "product", req.headers);
+        if (linkList && linkList.length > 0) {
+          finalImages = [...finalImages, ...linkList];
+        } else {
+          finalImages = [...finalImages, ...filesFromRequest.map(file => `/uploads/products/${file.filename}`)];
+        }
+      } catch (e) {
+        finalImages = [...finalImages, ...filesFromRequest.map(file => `/uploads/products/${file.filename}`)];
+      }
+      const updatedPrimary = bodyImageUrls.length ? bodyImageUrls[0] : (finalImages.length ? finalImages[0] : null);
+      await newProduct.update({
+        images: JSON.stringify(finalImages),
+        image: updatedPrimary
+      });
+    }
+
+    // TODO: Add ProductCategoryProduct mapping here if needed
+
+    return res.status(201).json({
+      status: "success",
+      message: "Product created successfully",
+      data: newProduct,
+      collections,
+      labels
+    });
+
+  } catch (error) {
+    console.error("Error creating product:", error);
+    return next(new AppError(`Failed to create product: ${error.message}`, 500));
+  }
+};
+
+
+
+
 /**
  * Create a new product
  * @route POST /api/products
@@ -263,6 +374,7 @@ exports.createProduct = async (req, res, next) => {
       price, // MRP
       sale_price, // Discounted price
       quantity,
+      warehouse_id,
       shipping_charges, // Shipping charges in INR
       shipping_included, // Whether shipping cost is included in price
       status = 'pending', // Default status is pending
@@ -328,7 +440,6 @@ exports.createProduct = async (req, res, next) => {
       return next(new AppError('Price and quantity are required fields', 400));
     }
 
-    console.log(catalogProduct);
     
     // Create the new product using catalog product details and vendor-specific information
     // Now we can include all fields including shipping fields
@@ -344,15 +455,13 @@ exports.createProduct = async (req, res, next) => {
       store_id: store.id,
       status,
       is_variation: false, // Not handling variations in this simplified flow
-      category: catalogProduct.category,
-      sub_category: catalogProduct.sub_category,
       brand_id: catalogProduct.brand_id,
       sale_type: catalogProduct.sale_type,
       length: catalogProduct.length,
       wide: catalogProduct.wide,
       height: catalogProduct.height,
       weight: catalogProduct.weight,
-      
+      warehouse_id: catalogProduct.warehouse_id,
       tax_id: catalogProduct.tax_id,
       is_featured: catalogProduct.is_featured || false,
       unit: catalogProduct.unit,
@@ -367,6 +476,7 @@ exports.createProduct = async (req, res, next) => {
       shipping_charges: productData.shipping_charges, 
       shipping_included: productData.shipping_included 
     });
+    
     
     let newProduct;
     

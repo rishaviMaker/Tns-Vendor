@@ -178,6 +178,10 @@ const Product = sequelize.define('Product', {
   unit: {
     type: DataTypes.STRING, // KG, Piece, etc.
     allowNull: true
+  },
+  warehouse_id: {
+    type: DataTypes.INTEGER,
+    allowNull: true
   }
 }, {
   tableName: 'ec_products',
