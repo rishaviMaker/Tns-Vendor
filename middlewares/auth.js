@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const { Vendor } = require('../models/Vendor');
+const { User } = require('../models/User');
 
 /**
  * Authentication middleware
@@ -32,6 +33,17 @@ const authenticate = async (req, res, next) => {
     
     // Check if vendor exists
     const vendor = await Vendor.findByPk(decoded.id);
+    if (!vendor) {
+      const user = await User.findByPk(decoded.id);
+      if (!user) {
+        return res.status(401).json({ 
+          status: 'fail', 
+          message: 'User not found' 
+        });
+      }
+      req.user = user;
+      return next();
+    }
     
     if (!vendor) {
       return res.status(401).json({ 

@@ -1,12 +1,16 @@
 const { User } = require("../models/User");
 const { Product } = require("../models/Product");
 const { ProductRequest } = require("../models/ProductRequest");
+const { Warehouse } = require("../models/Warehouse");
+const { ProductCategoryProduct } = require("../models/ProductCategoryProduct");
+const { ProductCategory } = require("../models/ProductCategory");
 const { Vendor } = require("../models/Vendor");
 const bcrypt = require("bcryptjs");
 const AppError = require("../utils/AppError");
 const jwt = require("jsonwebtoken");
 const cashfreeService = require("../services/cashfreeService");
 const { Store } = require('../models/Store');
+const { uploadProductImagesToRemote } = require('../services/remoteImageService');
 
 //Auth Controller
 exports.login = async (req, res, next) => {
@@ -88,6 +92,7 @@ exports.approveVendor = async (req, res, next) => {
   try {
     const { id } = req.params;
     const vendor = await Vendor.findByPk(id);
+    console.log(vendor);
     if (!vendor) {
       return next(new AppError("Vendor not found", 404));
     }
@@ -95,6 +100,7 @@ exports.approveVendor = async (req, res, next) => {
       isVerified: true,
       status: "approved",
     });
+  
     res.status(200).json({
       status: "success",
       message: "Vendor approved successfully",
@@ -566,16 +572,20 @@ exports.getAllProductRequests = async (req, res, next) => {
 exports.getProductRequest = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const productRequest = await ProductRequest.findByPk(id, {
-      attributes: { exclude: ["password"] },
-    });
+    const productRequest = await ProductRequest.findByPk(id);
     if (!productRequest) {
       return next(new AppError("Product request not found", 404));
     }
+    const category = await ProductCategory.findByPk(productRequest.category);
+    productRequest.category = category;
+    const vendor = await Vendor.findByPk(productRequest.vendor_id);
+    const warehouse = await Warehouse.findByPk(productRequest.warehouse_id);
     res.status(200).json({
       status: "success",
       data: {
         productRequest,
+        vendor,
+        warehouse,
       },
     });
   } catch (error) {
@@ -593,10 +603,16 @@ exports.ApproveProductRequest = async (req, res, next) => {
     const updatedProductRequest = await productRequest.update({
       status: "approved",
     });
+    const category = await ProductCategory.findByPk(productRequest.category);
+    productRequest.category = category;
+    const vendor = await Vendor.findByPk(productRequest.vendor_id);
+    const warehouse = await Warehouse.findByPk(productRequest.warehouse_id);
     res.status(200).json({
       status: "success",
       data: {
         productRequest: updatedProductRequest,
+        vendor,
+        warehouse,
       },
     });
   } catch (error) {
@@ -614,10 +630,16 @@ exports.RejectProductRequest = async (req, res, next) => {
     const updatedProductRequest = await productRequest.update({
       status: "rejected",
     });
+    const category = await ProductCategory.findByPk(productRequest.category);
+    productRequest.category = category;
+    const vendor = await Vendor.findByPk(productRequest.vendor_id);
+    const warehouse = await Warehouse.findByPk(productRequest.warehouse_id);
     res.status(200).json({
       status: "success",
       data: {
         productRequest: updatedProductRequest,
+        vendor,
+        warehouse,
       },
     });
   } catch (error) {
@@ -633,10 +655,16 @@ exports.DeleteProductRequest = async (req, res, next) => {
       return next(new AppError("Product request not found", 404));
     }
     const deletedProductRequest = await productRequest.destroy();
+    const category = await ProductCategory.findByPk(productRequest.category);
+    productRequest.category = category;
+    const vendor = await Vendor.findByPk(productRequest.vendor_id);
+    const warehouse = await Warehouse.findByPk(productRequest.warehouse_id);
     res.status(200).json({
       status: "success",
       data: {
         productRequest: deletedProductRequest,
+        vendor,
+        warehouse,
       },
     });
   } catch (error) {
@@ -694,10 +722,16 @@ exports.getProduct = async (req, res, next) => {
     if (!product) {
       return next(new AppError("Product not found", 404));
     }
+    const category = await ProductCategory.findByPk(product.category);
+    product.category = category;
+    const vendor = await Vendor.findByPk(product.vendor_id);
+    const warehouse = await Warehouse.findByPk(product.warehouse_id);
     res.status(200).json({
       status: "success",
       data: {
         product,
+        vendor,
+        warehouse,
       },
     });
   } catch (error) {
@@ -712,7 +746,7 @@ exports.updateProduct = async (req, res, next) => {
     if (!product) {
       return next(new AppError("Product not found", 404));
     }
-    const updatedProduct = await product.update(req.body);
+    const updatedProduct = await Product.update(req.body, { where: { id } });
     res.status(200).json({
       status: "success",
       data: {
@@ -724,138 +758,4 @@ exports.updateProduct = async (req, res, next) => {
   }
 };
 
-exports.createProduct = async (req, res, next) => {
-  try {
-    const {
-      price, // MRP
-      sale_price, // Discounted price
-      quantity,
-      shipping_charges, // Shipping charges in INR
-      shipping_included, // Whether shipping cost is included in price
-      status = 'pending', // Default status is pending
-    } = req.body;
-    
-  
-    const productData = {
-      name: req.body.name,
-      description: req.body.description,
-      content: req.body.content,
-      price: parseFloat(price), // MRP
-      sale_price: sale_price ? parseFloat(sale_price) : null, // Discounted price
-      quantity: parseInt(quantity),
-      sku: req.body.sku,
-      store_id: req.body.store_id,
-      status,
-      is_variation: false, // Not handling variations in this simplified flow
-      category: req.body.category,
-      sub_category: req.body.sub_category,
-      brand_id: req.body.brand_id,
-      sale_type: req.body.sale_type,
-      length: req.body.length,
-      wide: req.body.wide,
-      height: req.body.height,
-      weight: req.body.weight,
-      tax_id: req.body.tax_id,
-      is_featured: req.body.is_featured || false,
-      unit: req.body.unit,
-      shipping_charges: shipping_charges || 0,
-      shipping_included: shipping_included === 'true' || shipping_included === true ? true : false,
-      created_at: new Date(),
-      updated_at: new Date()
-    };
-    
-    let newProduct;
-    
-    try {
-      newProduct = await Product.create(productData);
-      console.log('Product created successfully with ID:', newProduct.id);
-      
-      if (req.files) {
-        const candidateImages = [];
-        if (req.files.image && req.files.image.length > 0) {
-          candidateImages.push(...req.files.image);
-        }
-        if (req.files.images && req.files.images.length > 0) {
-          candidateImages.push(...req.files.images);
-        }
-        if (req.files['images[]'] && req.files['images[]'].length > 0) {
-          candidateImages.push(...req.files['images[]']);
-        }
 
-        let remoteUploaded = false;
-        if (candidateImages.length > 0) {
-          console.log(`Attempting remote upload of ${candidateImages.length} image(s) for product ${newProduct.id}`);
-          const { linkList } = await uploadProductImagesToRemote(newProduct.id, candidateImages, 'product', req.headers);
-          if (linkList && linkList.length > 0) {
-            await Product.update(
-              { images: JSON.stringify(linkList), image: linkList[0] || null },
-              { where: { id: newProduct.id } }
-            );
-            newProduct.images = JSON.stringify(linkList);
-            newProduct.image = linkList[0] || null;
-            remoteUploaded = true;
-          } else {
-            console.warn('Remote upload returned no links; falling back to local paths');
-          }
-        }
-
-        // Fallback to existing local behavior for images if remote failed or no files
-        if (!remoteUploaded) {
-          const localImages = [];
-          if (req.files.image && req.files.image.length > 0) {
-            localImages.push(...req.files.image.map(file => `/uploads/products/${file.filename}`));
-          }
-          if (req.files.images && req.files.images.length > 0) {
-            localImages.push(...req.files.images.map(file => `/uploads/products/${file.filename}`));
-          }
-          if (req.files['images[]'] && req.files['images[]'].length > 0) {
-            localImages.push(...req.files['images[]'].map(file => `/uploads/products/${file.filename}`));
-          }
-          if (localImages.length > 0) {
-            console.log(`Processing ${localImages.length} additional images (local fallback)`);
-            await Product.update(
-              { images: JSON.stringify(localImages), image: localImages[0] || null },
-              { where: { id: newProduct.id } }
-            );
-            newProduct.images = JSON.stringify(localImages);
-            newProduct.image = localImages[0] || null;
-          }
-        }
-        
-        // Handle videos (unchanged)
-        if (req.files.videos && req.files.videos.length > 0) {
-          console.log(`Processing ${req.files.videos.length} videos`);
-          const videos = req.files.videos.map(file => `/uploads/products/${file.filename}`);
-          await Product.update(
-            { videos: JSON.stringify(videos) },
-            { where: { id: newProduct.id } }
-          );
-          newProduct.videos = JSON.stringify(videos);
-        }
-      }
-      
-      // Return success response
-      return res.status(201).json({
-        status: 'success',
-        message: 'Product created successfully',
-        data: {
-          product: newProduct,
-          catalog_source: {
-            id: newProduct.id,
-            name: newProduct.name,
-            brand: newProduct.brand
-          },
-          shipping_info: {
-            shipping_charges: newProduct.shipping_charges,
-            shipping_included: newProduct.shipping_included
-          } // Include shipping info from the saved product
-        }
-      });
-    } catch (error) {
-      console.error('Error during product creation process:', error);
-      return next(new AppError(`Failed to create product: ${error.message}`, 500));
-    }
-  } catch (error) {
-    next(error);
-  }
-};

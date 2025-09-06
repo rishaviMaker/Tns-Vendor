@@ -1,10 +1,15 @@
 const express = require('express');
 const adminController = require('../controllers/adminController');
-const { authenticate } = require('../middlewares/auth');
+const productController = require('../controllers/productController');
+const orderController = require('../controllers/orderController');
+const warehouseController = require('../controllers/warehouseController');
+const customerController = require('../controllers/customerController');
+const { authenticate } = require('../middlewares/adminAuth');
 
 const router = express.Router();
 
 router.post('/login', adminController.login);
+router.get('/all-warehouses', authenticate, warehouseController.getAllAdminWarehouse);
 router.get('/all-vendors', authenticate, adminController.getAllVendors);
 router.put('/vendor/:id/approve', authenticate, adminController.approveVendor);
 router.put('/vendor/:id/reject', authenticate, adminController.rejectVendor);
@@ -14,11 +19,29 @@ router.get('/all-products', authenticate, adminController.getAllProducts);
 router.get('/product/:id', authenticate, adminController.getProduct);
 router.get('/vendor/:id', authenticate, adminController.getVendor);
 router.put('/vendor/:id', authenticate, adminController.updateVendor);
+router.get('/product-request/:id', authenticate, adminController.getProductRequest);
 router.put('/product-request/:id/approve', authenticate, adminController.ApproveProductRequest);
 router.put('/product-request/:id/reject', authenticate, adminController.RejectProductRequest);
 router.delete('/product-request/:id', authenticate, adminController.DeleteProductRequest);
 router.delete('/product/:id', authenticate, adminController.DeleteProduct);
 router.put('/product/:id', authenticate, adminController.updateProduct);
-router.post('/product/create', authenticate, adminController.createProduct);
+router.post('/product/create', 
+  authenticate,
+  productController.upload,
+  productController.createAdminProduct);
+
+
+
+///////////////ORDER//////////////////////////
+router.get('/all-orders', authenticate, orderController.getAllOrderList);
+router.get('/order/:id', authenticate, orderController.getOrder);
+router.post('/order/:id', authenticate, orderController.updateOrder);
+
+///////////////CUSTOMER//////////////////////////
+router.get('/all-customers', authenticate, customerController.getAllCustomer);
+router.put('/customer/:id/lock', authenticate, customerController.LockCustomer);
+router.put('/customer/:id/active', authenticate, customerController.UnlockCustomer);
+
+
 
 module.exports = router;

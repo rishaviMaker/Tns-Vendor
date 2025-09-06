@@ -3,6 +3,8 @@ const { Product } = require('../models/Product');
 const { Vendor } = require('../models/Vendor');
 const { Store } = require('../models/Store');
 const { ProductCategoryProduct } = require('../models/ProductCategoryProduct');
+const { ProductCollectionProduct } = require('../models/ProductCollectionProduct');
+const { ProductLabelsProduct } = require('../models/ProductLabelsProduct');
 const AppError = require('../utils/AppError');
 const { uploadProductImagesToRemote } = require('../services/remoteImageService');
 const multer = require('multer');
@@ -61,6 +63,7 @@ const productRequestController = {
         const { 
           name, price, sale_price, quantity, shipping_charges, shipping_included,
           // Optional extended fields
+          collections, labels,
           description, content, sku, order,
           allow_checkout_when_out_of_stock, with_storehouse_management, is_featured,
           brand_id, is_variation, sale_type, start_date, end_date,
@@ -177,12 +180,37 @@ const productRequestController = {
           });
         }
 
+        if (collections && collections.length) {
+          await Promise.all(
+            collections.map(collection =>
+              ProductCollectionProduct.create({
+                collection_id: Number(collection), // convert "1" → 1 if needed
+                product_id: productRequest.id,
+              })
+            )
+          );
+        }
+        
+        if (labels && labels.length) {
+          await Promise.all(
+            labels.map(label =>
+              ProductLabelsProduct.create({
+                label_id: Number(label), // convert "1" → 1 if needed
+                product_id: productRequest.id,
+              })
+            )
+          );
+        }
+        
+        
         res.status(201).json({
           status: 'success',
           data: {
             productRequest: {
               ...productRequest.toJSON(),
               vendor: vendor,
+              collections: collections,
+              labels: labels,
               // store: store
             }
           }

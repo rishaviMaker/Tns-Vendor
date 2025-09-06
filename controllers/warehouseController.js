@@ -25,6 +25,22 @@ exports.getAllWarehouse = async (req, res, next) => {
   }
 };
 
+exports.getAllAdminWarehouse = async (req, res, next) => {
+  try {
+    const warehouse = await Warehouse.findAll();
+
+    res.status(200).json({
+      status: "success",
+      results: warehouse.length,
+      data: {
+        warehouse,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 /**
  * Get store by ID
  * @route GET /api/stores/:id

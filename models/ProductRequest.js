@@ -193,6 +193,10 @@ ProductRequest.init({
       this.setDataValue('images', JSON.stringify(value));
     }
   },
+  warehouse_id: {
+    type: DataTypes.INTEGER,
+    allowNull: true
+  },
   status: {
     type: DataTypes.ENUM('pending', 'approved', 'rejected'),
     defaultValue: 'pending',
