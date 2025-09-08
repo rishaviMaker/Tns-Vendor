@@ -8,9 +8,6 @@ const {
   ProductCollectionProduct,
 } = require("../models/ProductCollectionProduct");
 const { ProductCategory } = require("../models/ProductCategory");
-const { Warehouse } = require("../models/Warehouse");
-const { ProductCategoryProduct } = require("../models/ProductCategoryProduct");
-const { ProductCategory } = require("../models/ProductCategory");
 const { Vendor } = require("../models/Vendor");
 const { Payment } = require("../models/Payment");
 const { Order } = require("../models/Order");
