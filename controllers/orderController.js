@@ -860,8 +860,10 @@ exports.updateOrderStatus = async (req, res, next) => {
     const { id } = req.params;
     const { status } = req.body;
 
+
     // Validate required fields
     if (!status) {
+      return next(new AppError("Order status is required", 400));
       return next(new AppError("Order status is required", 400));
     }
 
