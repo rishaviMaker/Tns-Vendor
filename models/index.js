@@ -9,6 +9,7 @@ const { Product } = require("./Product");
 const { ProductCategoryProduct } = require("./ProductCategoryProduct");
 const { ProductLabelsProduct } = require("./ProductLabelsProduct");
 const { ProductCollectionProduct } = require("./ProductCollectionProduct");
+const { Brands } = require("./Brand");
 
 // Order ↔ Customer
 Order.belongsTo(Customer, { foreignKey: "user_id", as: "customer" });
@@ -33,6 +34,11 @@ OrderHistory.belongsTo(User, { foreignKey: "user_id", as: "user" });
 Order.hasMany(OrderAddress, { foreignKey: "order_id", as: "orderAddresses" });
 OrderAddress.belongsTo(Order, { foreignKey: "order_id", as: "order" });
 
+// A product belongs to one brand
+Product.belongsTo(Brands, { foreignKey: "brand_id", as: "brand" });
+Brands.hasMany(Product, { foreignKey: "brand_id", as: "products" });
+
+
 module.exports = {
   Customer,
   Payment,
@@ -41,4 +47,6 @@ module.exports = {
   OrderHistory,
   OrderAddress,
   User,
+  Product,
+  Brands,
 };

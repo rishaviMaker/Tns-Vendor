@@ -14,6 +14,7 @@ const { Order } = require("../models/Order");
 const { OrderHistory } = require("../models/OrderHistory");
 const { Customer } = require("../models/Customer");
 const { Tax } = require("../models/Tax");
+const { Brands } = require("../models/Brand");
 const bcrypt = require("bcryptjs");
 const AppError = require("../utils/AppError");
 const jwt = require("jsonwebtoken");
@@ -1090,12 +1091,19 @@ exports.getProduct = async (req, res, next) => {
     if (!product) {
       return next(new AppError("Product not found", 404));
     }
-    const category = await ProductCategory.findByPk(product.category);
+    const categoryId = await ProductCategoryProduct.findAll({
+      where: { product_id: id },
+    });
+    const category = await ProductCategory.findByPk(categoryId[0].category_id);
     product.category = category;
     const vendor = await Vendor.findByPk(product.vendor_id);
     const warehouse = await Warehouse.findByPk(product.warehouse_id);
     product.images = JSON.parse(product.images);
 
+    const tax = await Tax.findByPk(product.tax_id);
+    const brand = await Brands.findAll({
+      where: { id: product.brand_id },
+    });
     const productLabels = await ProductLabelsProduct.findAll({
       where: { product_id: id },
     });
@@ -1110,6 +1118,8 @@ exports.getProduct = async (req, res, next) => {
         warehouse,
         productLabels,
         productCollections,
+        tax,
+        brand,
       },
     });
   } catch (error) {
@@ -1120,10 +1130,12 @@ exports.getProduct = async (req, res, next) => {
 exports.updateProduct = async (req, res, next) => {
   try {
     const { id } = req.params;
+    const { collections, labels } = req.body;
     const product = await Product.findByPk(id);
     if (!product) {
       return next(new AppError("Product not found", 404));
     }
+    console.log(req.body);
     const updatedProduct = await Product.update(
       {
         name: req.body.name || product.name,
@@ -1141,9 +1153,11 @@ exports.updateProduct = async (req, res, next) => {
         tax_id: req.body.tax_id || product.tax_id,
         stock_status: req.body.stock_status || product.stock_status,
         shipping_charges: req.body.shipping_charges || product.shipping_charges,
+        category_id: req.body.category_id || product.category_id,
       },
       { where: { id } }
     );
+
     const updatedProductData = await Product.findByPk(id);
     updatedProductData.images = JSON.parse(updatedProductData.images);
     const warehouse = await Warehouse.findByPk(updatedProductData.warehouse_id);
@@ -1154,18 +1168,38 @@ exports.updateProduct = async (req, res, next) => {
     updatedProductData.category = category;
     const tax = await Tax.findByPk(updatedProductData.tax_id);
 
-    const collectionData = JSON.parse(collections).map((collection) => ({
-      product_id: updatedProductData.id,
-      product_collection_id: collection,
-    }));
-    const collectionProduct = await ProductCollectionProduct.bulkCreate(collectionData);
-    
-    const labelsData = JSON.parse(labels).map((label) => ({
-      product_id: updatedProductData.id,
-      product_label_id: label,
-    }));
-    const labelProduct = await ProductLabelsProduct.bulkCreate(labelsData);
-    
+    let collectionProduct = [];
+    let labelProduct = [];
+
+    if (collections) {
+      await ProductCollectionProduct.destroy({ where: { product_id: id } });
+      console.log("collections", collections);
+      const collectionData = JSON.parse(collections).map((collection) => ({
+        product_id: updatedProductData.id,
+        product_collection_id: collection,
+      }));
+      console.log("collectionData", collectionData);
+      collectionProduct = await ProductCollectionProduct.bulkCreate(
+        collectionData
+      );
+    } else {
+      collectionProduct = await ProductCollectionProduct.findAll({
+        where: { product_id: id },
+      });
+    }
+
+    if (labels) {
+      await ProductLabelsProduct.destroy({ where: { product_id: id } });
+      const labelData = JSON.parse(labels).map((label) => ({
+        product_id: updatedProductData.id,
+        product_label_id: label,
+      }));
+      labelProduct = await ProductLabelsProduct.bulkCreate(labelData);
+    } else {
+      labelProduct = await ProductLabelsProduct.findAll({
+        where: { product_id: id },
+      });
+    }
     res.status(200).json({
       status: "success",
       data: {

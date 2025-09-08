@@ -9,6 +9,77 @@ const ExcelJS = require('exceljs');
 const eventNotificationService = require('../services/eventNotificationService');
 const revenueService = require('../services/revenueService');
 
+
+
+/**
+ * Get a specific withdrawal request by ID
+ */
+exports.getWithdrawalByIdAdmin = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    
+    const withdrawal = await CustomerWithdrawal.findByPk(id);
+    
+    if (!withdrawal) {
+      return next(new AppError('Withdrawal request not found or you do not have permission to view it', 404));
+    }
+    
+    // Add bank_details to the withdrawal
+    const processedWithdrawal = addBankDetails(withdrawal);
+    
+    return res.status(200).json({
+      status: 'success',
+      data: {
+        withdrawal: processedWithdrawal
+      }
+    });
+  } catch (error) {
+    console.error('Error in getWithdrawalById:', error);
+    return next(new AppError(`Error fetching withdrawal request: ${error.message}`, 500));
+  }
+};
+
+
+exports.getAllWithdrawals = async (req, res, next) => {
+  try {
+    const { status, startDate, endDate } = req.query;
+    
+    // Build the query conditions
+    const whereClause = {};
+    
+    // Add status filter if provided
+    if (status && ['pending', 'processing', 'completed', 'failed'].includes(status)) {
+      whereClause.status = status;
+    }
+    
+    // Add date range filter if provided
+    if (startDate && endDate) {
+      whereClause.created_at = {
+        [Op.between]: [new Date(startDate), new Date(endDate)]
+      };
+    }
+    
+    const withdrawals = await CustomerWithdrawal.findAll({
+      where: whereClause,
+      order: [['created_at', 'DESC']]
+    });
+    
+    // Add bank_details to each withdrawal
+    const processedWithdrawals = withdrawals.map(withdrawal => addBankDetails(withdrawal));
+    
+    return res.status(200).json({
+      status: 'success',
+      results: processedWithdrawals.length,
+      data: {
+        withdrawals: processedWithdrawals
+      }
+    });
+  } catch (error) {
+    console.error('Error in getWithdrawals:', error);
+    return next(new AppError(`Error fetching withdrawal requests: ${error.message}`, 500));
+  }
+};
+
 /**
  * Parse bank info and add bank_details to withdrawal object
  * @param {Object} withdrawal - Withdrawal object

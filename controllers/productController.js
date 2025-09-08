@@ -1,6 +1,7 @@
 const { Product } = require("../models/Product");
 const { ProductCollection } = require("../models/ProductCollection");
 const { ProductBrand } = require("../models/ProductBrand");
+const { Brands } = require("../models/Brand");
 const { ProductLabel } = require("../models/ProductLabel");
 const {
   ProductCollectionProduct,
@@ -8,6 +9,7 @@ const {
 const { ProductLabelsProduct } = require("../models/ProductLabelsProduct");
 const { Tax } = require("../models/Tax");
 const { Store } = require("../models/Store");
+
 const { ProductRequest } = require("../models/ProductRequest");
 const productSearchService = require("../services/productSearchService");
 const AppError = require("../utils/AppError");
@@ -428,7 +430,7 @@ exports.createAdminProduct = async (req, res, next) => {
       product_label_id: label,
     }));
     const labelProduct = await ProductLabelsProduct.bulkCreate(labelsData);
-
+  
     return res.status(201).json({
       status: "success",
       message: "Product created successfully",
@@ -924,6 +926,100 @@ exports.updateProduct = async (req, res, next) => {
   }
 };
 
+exports.updateProductAdmin = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { collections, labels } = req.body;
+    const product = await Product.findByPk(id);
+    if (!product) {
+      return next(new AppError("Product not found", 404));
+    }
+    const updatedProduct = await Product.update(
+      {
+        name: req.body.name || product.name,
+        description: req.body.description || product.description,
+        sku: req.body.sku || product.sku,
+        quantity: req.body.quantity || product.quantity,
+        status: req.body.status || product.status,
+        sku: req.body.sku || product.sku,
+        allow_checkout_when_out_of_stock:
+          req.body.allow_checkout_when_out_of_stock ||
+          product.allow_checkout_when_out_of_stock,
+        brand_id: req.body.brand_id || product.brand_id,
+        price: req.body.price || product.price,
+        sale_price: req.body.sale_price || product.sale_price,
+        tax_id: req.body.tax_id || product.tax_id,
+        stock_status: req.body.stock_status || product.stock_status,
+        shipping_charges: req.body.shipping_charges || product.shipping_charges,
+      },
+      { where: { id } }
+    );
+
+    if(req.body.category_id){    
+      const category = await ProductCategoryProduct.findAll({where:{product_id:id}});
+      if(category.length === 0){
+        await ProductCategoryProduct.create({category_id: req.body.category_id, product_id: id});
+        console.log("Product Category Created!")
+      } else {
+        await ProductCategoryProduct.update({category_id: req.body.category_id}, { where: { product_id: id } });
+        console.log("Product Category Updated!")
+      }
+    }
+    const updatedProductData = await Product.findByPk(id);
+    updatedProductData.images = JSON.parse(updatedProductData.images);
+    const warehouse = await Warehouse.findByPk(updatedProductData.warehouse_id);
+    const vendor = await Vendor.findByPk(updatedProductData.vendor_id);
+    const category_id = await ProductCategoryProduct.findAll( { where: { product_id:id } } );
+    const category = await ProductCategory.findByPk(category_id[0].category_id);
+    const brand = await Brands.findAll({where:{id:updatedProductData.brand_id}});
+    updatedProductData.category = category;
+    const tax = await Tax.findByPk(updatedProductData.tax_id);
+
+    let collectionProduct = [];
+    let labelProduct = [];
+
+
+    if (collections) {
+      await ProductCollectionProduct.destroy({ where: { product_id: id } });
+      const collectionData = JSON.parse(collections).map((collection) => ({
+        product_id: updatedProductData.id,
+        product_collection_id: collection,
+      }));
+      collectionProduct = await ProductCollectionProduct.bulkCreate(collectionData);
+    } else {
+      collectionProduct = await ProductCollectionProduct.findAll({
+        where: { product_id: id },
+      });
+    }
+
+    if (labels) {
+      await ProductLabelsProduct.destroy({ where: { product_id: id } });
+      const labelData = JSON.parse(labels).map((label) => ({
+        product_id: updatedProductData.id,
+        product_label_id: label,
+      }));
+      labelProduct = await ProductLabelsProduct.bulkCreate(labelData);
+    } else {
+      labelProduct = await ProductLabelsProduct.findAll({
+        where: { product_id: id },
+      });
+    }
+    res.status(200).json({
+      status: "success",
+      data: {
+        product: updatedProductData,
+        warehouse,
+        vendor,
+        tax,
+        collectionProduct,
+        labelProduct,
+        brand
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
 /**
  * Delete product
  * @route DELETE /api/products/:id
