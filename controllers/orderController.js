@@ -3,9 +3,11 @@ const { Store } = require("../models/Store");
 const AppError = require("../utils/AppError");
 const { sequelize } = require("../config/db");
 const { Op, fn, col, where } = require("sequelize");
-const { Customer } = require("../models/Customer");
-const { Payment } = require("../models/Payment");
-const { OrderProduct } = require("../models/OrderProduct");
+const { Customer } = require("../models/");
+const { Payment } = require("../models");
+const { OrderProduct } = require("../models");
+const { OrderAddress } = require("../models");
+const { OrderHistory } = require("../models");
 
 /**
  * Helper function to calculate payment summary for an order with its products
@@ -947,11 +949,49 @@ exports.updateOrder = async (req, res, next) => {
         { model: Payment, as: "payment" },
         { model: Customer, as: "customer" },
         { model: OrderProduct, as: "orderProducts" },
+        { model: OrderHistory, as: "orderHistories" },
+        { model: OrderAddress, as: "orderAddresses" },
       ],
     });
     res.status(200).json({
       status: "success",
       message: "Order updated successfully",
+      data: {
+        order: LatestOrder,
+      },
+    });
+  } catch (error) {
+    console.error("Error updating order:", error);
+    return next(new AppError(`Error updating order: ${error.message}`, 500));
+  }
+};
+
+exports.confirmOrder = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    const order = await Order.findByPk(id);
+    if (!order) {
+      return next(new AppError("Order not found", 404));
+    }
+    const updatedOrder = await order.update({
+      is_confirmed: true,
+      status: "processing",
+    });
+
+    const LatestOrder = await Order.findOne({
+      where: { id: updatedOrder.id },
+      include: [
+        { model: Payment, as: "payment" },
+        { model: Customer, as: "customer" },
+        { model: OrderProduct, as: "orderProducts" },
+        { model: OrderHistory, as: "orderHistories" },
+        { model: OrderAddress, as: "orderAddresses" },
+      ],
+    });
+    res.status(200).json({
+      status: "success",
+      message: "Order confirmed successfully",
       data: {
         order: LatestOrder,
       },
@@ -974,6 +1014,8 @@ exports.getOrder = async (req, res , next) => {
         { model: Payment, as: "payment" },
         { model: Customer, as: "customer" },
         { model: OrderProduct, as: "orderProducts" },
+        { model: OrderHistory, as: "orderHistories" },
+        { model: OrderAddress, as: "orderAddresses" },
       ],
     });
     if (!order) {

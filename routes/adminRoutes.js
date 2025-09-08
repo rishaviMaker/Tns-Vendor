@@ -9,6 +9,7 @@ const { authenticate } = require('../middlewares/adminAuth');
 const router = express.Router();
 
 router.post('/login', adminController.login);
+router.get('/dashboard', authenticate, adminController.getDashboard);
 router.get('/all-warehouses', authenticate, warehouseController.getAllAdminWarehouse);
 router.get('/all-vendors', authenticate, adminController.getAllVendors);
 router.put('/vendor/:id/approve', authenticate, adminController.approveVendor);
@@ -36,9 +37,11 @@ router.post('/product/create',
 router.get('/all-orders', authenticate, orderController.getAllOrderList);
 router.get('/order/:id', authenticate, orderController.getOrder);
 router.post('/order/:id', authenticate, orderController.updateOrder);
+router.put('/order/:id/confirm', authenticate, orderController.confirmOrder);
 
 ///////////////CUSTOMER//////////////////////////
 router.get('/all-customers', authenticate, customerController.getAllCustomer);
+router.get('/customer/:id', authenticate, customerController.getCustomerById);
 router.put('/customer/:id/lock', authenticate, customerController.LockCustomer);
 router.put('/customer/:id/active', authenticate, customerController.UnlockCustomer);
 

@@ -4,7 +4,7 @@ const { sequelize } = require("../config/db");
 const ProductCollectionProduct = sequelize.define(
   "ProductCollectionProduct",
   {
-    collection_id: {
+    product_collection_id: {
       type: DataTypes.INTEGER,
       allowNull: true,
     },

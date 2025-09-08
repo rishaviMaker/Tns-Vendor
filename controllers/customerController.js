@@ -54,6 +54,31 @@ exports.getAllCustomer = async (req, res, next) => {
   }
 };
 
+exports.getCustomerById = async (req, res, next) => {
+  try {
+    const customer_id = req.params.id
+    const customer = await Customer.findByPk(customer_id,{
+      attributes: {
+        exclude: ["password"],
+      },
+    });
+    if(!customer){
+      return res.status(404).json({
+        status: "fail",
+        message: "Customer not found",
+      });
+    }
+    res.status(200).json({
+      status: "success",
+      data: {
+        customer,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
 exports.LockCustomer = async (req, res, next) => {
     try {
         const customerId = req.params.id;

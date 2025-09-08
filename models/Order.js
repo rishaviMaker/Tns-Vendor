@@ -1,8 +1,5 @@
 const { DataTypes } = require('sequelize');
 const { sequelize } = require('../config/db');
-const { Customer } = require('./Customer');
-const { Payment } = require('./Payment');
-const { OrderProduct } = require('./OrderProduct');
 
 const Order = sequelize.define('Order', {
   id: {
@@ -96,36 +93,5 @@ const Order = sequelize.define('Order', {
   underscored: true // Use snake_case for column names
 });
 
-// Note: We're handling associations directly in the controller to avoid circular dependencies
-
-Order.belongsTo(Customer, {
-  foreignKey: 'user_id',
-  as: 'customer'
-});
-
-Customer.hasMany(Order, {
-  foreignKey: 'user_id',
-  as: 'orders'
-});
-
-Order.belongsTo(Payment, {
-  foreignKey: 'payment_id',
-  as: 'payment'
-});
-
-Payment.hasOne(Order, {
-  foreignKey: 'payment_id',
-  as: 'order'
-});
-
-Order.hasMany(OrderProduct, {
-  foreignKey: 'order_id',
-  as: 'orderProducts'
-});
-
-OrderProduct.belongsTo(Order, {
-  foreignKey: 'order_id',
-  as: 'order'
-});
 
 module.exports = { Order };
