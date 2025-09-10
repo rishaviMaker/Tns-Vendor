@@ -146,7 +146,8 @@ const productRequestController = {
           videos: videosParsed.length ? videosParsed : undefined,
           purchase_price, hsn_sac_code, applicable_tax, unit,
           is_quotable: is_quotable !== undefined ? toBool(is_quotable) : undefined,
-          warehouse_id
+          warehouse_id,
+          category_id,
         });
 
         // After creating, upload images to remote using the new ProductRequest ID, then update the record
