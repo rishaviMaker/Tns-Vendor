@@ -215,6 +215,8 @@ const productRequestController = {
           }));
           labelProduct = await ProductLabelsProduct.bulkCreate(labelsData);
         }
+
+        productRequest.image = JSON.parse(productRequest.image);
         
         
         res.status(201).json({
