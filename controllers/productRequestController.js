@@ -71,6 +71,9 @@ const productRequestController = {
           created_by_id, created_by_type, approved_by, image, category, sub_category,
           videos, purchase_price, hsn_sac_code, applicable_tax, unit, is_quotable, category_id,warehouse_id
         } = req.body;
+
+
+        console.log(req.body);
         // Validate required fields
         if (!name) {
           return next(new AppError('Product name is required', 400));
@@ -176,7 +179,7 @@ const productRequestController = {
 
         if (category_id) {
           await ProductCategoryProduct.create({
-            product_category_id: category_id,
+            category_id: category_id,
             product_id: productRequest.id
           });
         }
