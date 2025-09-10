@@ -809,7 +809,7 @@ exports.createProduct = async (req, res, next) => {
         labelProduct = await ProductLabelsProduct.bulkCreate(labelsData);
       }
 
-      newProduct.image = JSON.parse(newProduct.image);
+      // newProduct.image = JSON.parse(newProduct.image);
       // Return success response
       return res.status(201).json({
         status: "success",
