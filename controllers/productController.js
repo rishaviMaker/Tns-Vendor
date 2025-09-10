@@ -716,7 +716,7 @@ exports.createProduct = async (req, res, next) => {
               { images: JSON.stringify(linkList), image: linkList[0] || null },
               { where: { id: newProduct.id } }
             );
-            newProduct.images = JSON.stringify(linkList);
+            newProduct.images = linkList;
             newProduct.image = linkList[0] || null;
             remoteUploaded = true;
           } else {
@@ -809,7 +809,6 @@ exports.createProduct = async (req, res, next) => {
         labelProduct = await ProductLabelsProduct.bulkCreate(labelsData);
       }
 
-      // newProduct.image = JSON.parse(newProduct.image);
       // Return success response
       return res.status(201).json({
         status: "success",
