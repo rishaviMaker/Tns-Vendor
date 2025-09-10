@@ -851,7 +851,7 @@ exports.createProduct = async (req, res, next) => {
 exports.updateProduct = async (req, res, next) => {
   try {
     const { id } = req.params;
-
+    const { collections, labels } = req.body;
     console.log(req.body);
     const product = await Product.findByPk(id);
     if (!product) {
@@ -1011,11 +1011,51 @@ exports.updateProduct = async (req, res, next) => {
     product.updated_at = new Date();
     await product.save();
 
+    let collectionProduct = [];
+    let labelProduct = [];
+
+    if (collections) {
+      let parsedCollections = collections;
+      if (typeof collections === "string") {
+        parsedCollections = JSON.parse(collections);
+      }
+      await ProductCollectionProduct.destroy({ where: { product_id: product.id } });
+      const collectionData = parsedCollections.map((collection) => ({
+        product_id: product.id,
+        product_collection_id: collection,
+      }));
+      collectionProduct = await ProductCollectionProduct.bulkCreate(
+        collectionData
+      );
+    } else {
+      collectionProduct = await ProductCollectionProduct.findAll({
+        where: { product_id: product.id },
+      });
+    }
+
+    if (labels) {
+      let parsedLabels = labels;
+      if (typeof labels === "string") {
+        parsedLabels = JSON.parse(labels);
+      }
+      await ProductLabelsProduct.destroy({ where: { product_id: product.id } });
+      const labelData = parsedLabels.map((label) => ({
+        product_id: product.id,
+        product_label_id: label,
+      }));
+      labelProduct = await ProductLabelsProduct.bulkCreate(labelData);
+    } else {
+      labelProduct = await ProductLabelsProduct.findAll({
+        where: { product_id: product.id },
+      });
+    }
     product.images = JSON.parse(product.images);
     res.status(200).json({
       status: "success",
       data: {
         product,
+        collectionProduct,
+        labelProduct,
       },
     });
   } catch (error) {
