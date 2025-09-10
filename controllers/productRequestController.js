@@ -5,6 +5,8 @@ const { Store } = require('../models/Store');
 const { ProductCategoryProduct } = require('../models/ProductCategoryProduct');
 const { ProductCollectionProduct } = require('../models/ProductCollectionProduct');
 const { ProductLabelsProduct } = require('../models/ProductLabelsProduct');
+const { ProductCategory } = require('../models/ProductCategory');
+const { Warehouse } = require('../models/Warehouse');
 const AppError = require('../utils/AppError');
 const { uploadProductImagesToRemote } = require('../services/remoteImageService');
 const multer = require('multer');
@@ -290,41 +292,23 @@ const productRequestController = {
   async getProductRequestById(req, res, next) {
     try {
       const { id } = req.params;
-      const vendorId = req.user.id;
-
-      // Find the product request
-      const productRequest = await ProductRequest.findOne({
-        where: { id, vendor_id: vendorId }
-      });
-
-      // Check if product request exists
+      const productRequest = await ProductRequest.findByPk(id);
       if (!productRequest) {
-        return next(new AppError('Product request not found', 404));
+        return next(new AppError("Product request not found", 404));
       }
-
-      // Get vendor details
-      const vendor = await Vendor.findByPk(vendorId, {
-        attributes: ['id', 'fullName', 'email', 'mobileNumber']
-      });
-
-      // Get store details
-      const store = await Store.findByPk(productRequest.store_id, {
-        attributes: ['id', 'name']
-      });
-
-      // Return success response with vendor and store details
+      const category = await ProductCategory.findByPk(productRequest.category);
+      productRequest.category = category;
+      const vendor = await Vendor.findByPk(productRequest.vendor_id);
+      const warehouse = await Warehouse.findByPk(productRequest.warehouse_id);
       res.status(200).json({
-        status: 'success',
+        status: "success",
         data: {
-          productRequest: {
-            ...productRequest.toJSON(),
-            vendor,
-            store
-          }
-        }
+          productRequest,
+          vendor,
+          warehouse,
+        },
       });
     } catch (error) {
-      console.error('Error fetching product request:', error);
       next(error);
     }
   },
