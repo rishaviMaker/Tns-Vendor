@@ -1094,8 +1094,24 @@ exports.getProduct = async (req, res, next) => {
     const categoryId = await ProductCategoryProduct.findAll({
       where: { product_id: id },
     });
-    const category = await ProductCategory.findByPk(categoryId[0].category_id);
-    product.category = category;
+    const categories = await ProductCategory.findAll({
+      where: { id: categoryId.map((c) => c.category_id) },
+      include: [
+        {
+          model: ProductCategory,
+          as: "parent",
+          required: false,
+          include: [
+            {
+              model: ProductCategory,
+              as: "parent",
+              required: false
+            }
+          ]
+        }
+      ]
+    });
+    product.category = categories[0];
     const vendor = await Vendor.findByPk(product.vendor_id);
     const warehouse = await Warehouse.findByPk(product.warehouse_id);
     product.images = JSON.parse(product.images);
