@@ -187,6 +187,10 @@ exports.getAllProducts = async (req, res, next) => {
       queryOptions
     );
 
+    products.forEach((product) => {
+      product.images = JSON.parse(product.images);
+    });
+
     res.status(200).json({
       status: "success",
       results: products.length,
