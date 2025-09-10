@@ -176,7 +176,7 @@ const productRequestController = {
 
         if (category_id) {
           await ProductCategoryProduct.create({
-            category_id: category,
+            product_category_id: category_id,
             product_id: productRequest.id
           });
         }
