@@ -195,7 +195,7 @@ const productRequestController = {
           }
     
           const collectionData = parsedCollections.map((collection) => ({
-            product_id: newProduct.id,
+            product_id: productRequest.id,
             product_collection_id: collection,
           }));
     
@@ -210,7 +210,7 @@ const productRequestController = {
             parsedLabels = JSON.parse(labels);
           }
           const labelsData = parsedLabels.map((label) => ({
-            product_id: newProduct.id,
+            product_id: productRequest.id,
             product_label_id: label,
           }));
           labelProduct = await ProductLabelsProduct.bulkCreate(labelsData);
