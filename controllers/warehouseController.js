@@ -143,6 +143,7 @@ exports.createWarehouse = async (req, res, next) => {
       });
     }
 
+    console.log(req.body);
     // Create warehouse
     const newWarehouse = await Warehouse.create({
       name,
@@ -156,6 +157,8 @@ exports.createWarehouse = async (req, res, next) => {
       vendor_id,
       store_id: store_id || null,
     });
+
+    console.log(newWarehouse);
 
     res.status(201).json({
       status: "success",
