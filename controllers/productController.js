@@ -982,7 +982,7 @@ exports.updateProduct = async (req, res, next) => {
     const mergedImages = Array.from(
       new Set([...existingImages, ...bodyImages, ...newImageLinks])
     );
-    product.images = mergedImages;
+    product.images = JSON.stringify(mergedImages);
 
     // Primary image logic: if an explicit body image is provided (req.body.image), keep it; else
     // if a new main image file was sent or current primary was removed or empty, set to first merged image
@@ -1011,6 +1011,7 @@ exports.updateProduct = async (req, res, next) => {
     product.updated_at = new Date();
     await product.save();
 
+    product.images = JSON.parse(product.images);
     res.status(200).json({
       status: "success",
       data: {
