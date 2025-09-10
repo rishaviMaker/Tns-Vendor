@@ -852,6 +852,7 @@ exports.updateProduct = async (req, res, next) => {
   try {
     const { id } = req.params;
 
+    console.log(req.body);
     const product = await Product.findByPk(id);
     if (!product) {
       return res.status(404).json({
