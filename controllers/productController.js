@@ -228,11 +228,11 @@ exports.getProductById = async (req, res, next) => {
             {
               model: ProductCategory,
               as: "parent",
-              required: false
-            }
-          ]
-        }
-      ]
+              required: false,
+            },
+          ],
+        },
+      ],
     });
     product.category = categories[0];
     const vendor = await Vendor.findByPk(product.vendor_id);
@@ -491,17 +491,18 @@ exports.createAdminProduct = async (req, res, next) => {
         },
       });
       if (!warehouse) {
-        return next(
-          new AppError("Warehouse not found", 404)
-        );
+        return next(new AppError("Warehouse not found", 404));
       }
-      await Product.update({
-        store_id: warehouse[0].store_id,
-      }, {
-        where: {
-          id: newProduct.id,
+      await Product.update(
+        {
+          store_id: warehouse[0].store_id,
         },
-      });
+        {
+          where: {
+            id: newProduct.id,
+          },
+        }
+      );
     }
     const latestProduct = await Product.findByPk(newProduct.id);
     return res.status(201).json({
@@ -778,20 +779,35 @@ exports.createProduct = async (req, res, next) => {
           newProduct.videos = JSON.stringify(videos);
         }
       }
-      const collectionData = JSON.parse(collections).map((collection) => ({
-        product_id: newProduct.id,
-        product_collection_id: collection,
-      }));
+      let collectionProduct = [];
+      let labelProduct = [];
+      if (collections) {
+        let parsedCollections = collections;
+        if (typeof collections === "string") {
+          parsedCollections = JSON.parse(collections);
+        }
 
-      const collectionProduct = await ProductCollectionProduct.bulkCreate(
-        collectionData
-      );
+        const collectionData = parsedCollections.map((collection) => ({
+          product_id: newProduct.id,
+          product_collection_id: collection,
+        }));
 
-      const labelsData = JSON.parse(labels).map((label) => ({
-        product_id: newProduct.id,
-        product_label_id: label,
-      }));
-      const labelProduct = await ProductLabelsProduct.bulkCreate(labelsData);
+        collectionProduct = await ProductCollectionProduct.bulkCreate(
+          collectionData
+        );
+      }
+
+      if (labels) {
+        let parsedLabels = labels;
+        if (typeof labels === "string") {
+          parsedLabels = JSON.parse(labels);
+        }
+        const labelsData = parsedLabels.map((label) => ({
+          product_id: newProduct.id,
+          product_label_id: label,
+        }));
+        labelProduct = await ProductLabelsProduct.bulkCreate(labelsData);
+      }
 
       // Return success response
       return res.status(201).json({
@@ -1082,7 +1098,6 @@ exports.updateProductAdmin = async (req, res, next) => {
       });
     }
 
-
     const updatedProduct = await Product.update(
       {
         name: req.body.name || product.name,
@@ -1140,11 +1155,11 @@ exports.updateProductAdmin = async (req, res, next) => {
             {
               model: ProductCategory,
               as: "parent",
-              required: false
-            }
-          ]
-        }
-      ]
+              required: false,
+            },
+          ],
+        },
+      ],
     });
     updatedProductData.category = categories[0];
     const brand = await Brands.findAll({
