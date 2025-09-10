@@ -186,26 +186,34 @@ const productRequestController = {
           });
         }
 
-        if (collections && collections.length) {
-          await Promise.all(
-            collections.map(collection =>
-              ProductCollectionProduct.create({
-                collection_id: Number(collection), // convert "1" → 1 if needed
-                product_id: productRequest.id,
-              })
-            )
+        let collectionProduct = [];
+        let labelProduct = [];
+        if (collections) {
+          let parsedCollections = collections;
+          if (typeof collections === "string") {
+            parsedCollections = JSON.parse(collections);
+          }
+    
+          const collectionData = parsedCollections.map((collection) => ({
+            product_id: newProduct.id,
+            product_collection_id: collection,
+          }));
+    
+          collectionProduct = await ProductCollectionProduct.bulkCreate(
+            collectionData
           );
         }
-        
-        if (labels && labels.length) {
-          await Promise.all(
-            labels.map(label =>
-              ProductLabelsProduct.create({
-                label_id: Number(label), // convert "1" → 1 if needed
-                product_id: productRequest.id,
-              })
-            )
-          );
+    
+        if (labels) {
+          let parsedLabels = labels;
+          if (typeof labels === "string") {
+            parsedLabels = JSON.parse(labels);
+          }
+          const labelsData = parsedLabels.map((label) => ({
+            product_id: newProduct.id,
+            product_label_id: label,
+          }));
+          labelProduct = await ProductLabelsProduct.bulkCreate(labelsData);
         }
         
         
@@ -215,8 +223,8 @@ const productRequestController = {
             productRequest: {
               ...productRequest.toJSON(),
               vendor: vendor,
-              collections: collections,
-              labels: labels,
+              collectionProduct,
+              labelProduct,
               // store: store
             }
           }
