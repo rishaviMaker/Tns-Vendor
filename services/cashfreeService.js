@@ -412,6 +412,7 @@ const verifyGSTIN = async (gstinNumber) => {
 
     return {
       verified,
+      status: "success",
       message: verified ? 'GSTIN verified successfully' : 'GSTIN verification failed',
       data: result
     };
