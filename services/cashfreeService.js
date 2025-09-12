@@ -397,6 +397,8 @@ const verifyGSTIN = async (gstinNumber) => {
       { headers }
     );
 
+
+    console.log('GSTIN Verification Response:', response.data);
     const result = response.data;
     const verified = result.status === 'SUCCESS' || result.status === 'VALID';
 
