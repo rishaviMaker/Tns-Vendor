@@ -43,7 +43,7 @@ const router = express.Router();
  *       500:
  *         description: Server error
  */
-router.post('/pan', authenticate, async (req, res) => {
+router.post('/pan', async (req, res) => {
   try {
     const { idProof, name } = req.body;
     
@@ -100,7 +100,7 @@ router.post('/pan', authenticate, async (req, res) => {
  *       500:
  *         description: Server error
  */
-router.post('/aadhaar/otp', authenticate, async (req, res) => {
+router.post('/aadhaar/otp', async (req, res) => {
   try {
     const { idProof } = req.body;
     
@@ -169,7 +169,7 @@ router.post('/aadhaar/otp', authenticate, async (req, res) => {
  *       500:
  *         description: Server error
  */
-router.post('/aadhaar/verify', authenticate, async (req, res) => {
+router.post('/aadhaar/verify', async (req, res) => {
   try {
     const { idProof, otp, requestId, name } = req.body;
     
@@ -230,7 +230,7 @@ router.post('/aadhaar/verify', authenticate, async (req, res) => {
  *       500:
  *         description: Server error
  */
-router.post('/aadhaar', authenticate, async (req, res) => {
+router.post('/aadhaar', async (req, res) => {
   try {
     const { idProof, name } = req.body;
     
@@ -292,7 +292,7 @@ router.post('/aadhaar', authenticate, async (req, res) => {
  *       500:
  *         description: Server error
  */
-router.post('/dl', authenticate, async (req, res) => {
+router.post('/dl', async (req, res) => {
   try {
     const { idProof, dob } = req.body;
     
@@ -349,7 +349,7 @@ router.post('/dl', authenticate, async (req, res) => {
  *       500:
  *         description: Server error
  */
-router.post('/gstin', authenticate, async (req, res) => {
+router.post('/gstin', async (req, res) => {
   try {
     const { idProof } = req.body;
     
@@ -409,7 +409,7 @@ router.post('/gstin', authenticate, async (req, res) => {
  *       500:
  *         description: Server error
  */
-router.post('/voterid', authenticate, async (req, res) => {
+router.post('/voterid', async (req, res) => {
   try {
     const { idProof, name } = req.body;
     
@@ -478,7 +478,7 @@ router.post('/voterid', authenticate, async (req, res) => {
  *       500:
  *         description: Server error
  */
-router.post('/verify', authenticate, async (req, res) => {
+router.post('/verify', async (req, res) => {
   try {
     const { idProofType, idProof, ...options } = req.body;
     
