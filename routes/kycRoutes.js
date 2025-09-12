@@ -363,6 +363,7 @@ router.post('/gstin', async (req, res) => {
     const result = await cashfreeService.verifyGSTIN(idProof);
     
     return res.json({
+      status: "success",
       success: result.verified,
       message: result.message,
       data: result.data
@@ -370,6 +371,7 @@ router.post('/gstin', async (req, res) => {
   } catch (error) {
     console.error('Error in GSTIN verification route:', error);
     return res.status(500).json({
+      status: "error",
       success: false,
       message: 'Error during GSTIN verification',
       error: error.message
