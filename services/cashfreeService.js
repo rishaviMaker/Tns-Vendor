@@ -400,7 +400,7 @@ const verifyGSTIN = async (gstinNumber) => {
 
     console.log('GSTIN Verification Response:', response.data);
     const result = response.data;
-    const verified = result.status === 'SUCCESS' || result.status === 'VALID';
+    const verified = result.status === 'SUCCESS' || result.valid === true;
 
     // Cache successful verifications
     if (verified) {
