@@ -384,7 +384,7 @@ const verifyGSTIN = async (gstinNumber) => {
     
     // Using snake_case for consistency
     const payload = {
-      gstin_number: gstinNumber
+      gstin: gstinNumber
     };
     
     const headers = getCashfreeHeaders();
