@@ -57,6 +57,7 @@ router.post('/pan', async (req, res) => {
     const result = await cashfreeService.verifyPAN(idProof, name);
     
     return res.json({
+      status: result.verified ? "success" : "error",
       success: result.verified,
       message: result.message,
       data: result.data
@@ -115,6 +116,7 @@ router.post('/aadhaar/otp', async (req, res) => {
     const result = await cashfreeService.verifyAadhaar(idProof);
     
     return res.json({
+      status: result.success ? "success" : "error",
       success: result.success,
       message: result.message,
       data: result.data
@@ -122,6 +124,7 @@ router.post('/aadhaar/otp', async (req, res) => {
   } catch (error) {
     console.error('Error in Aadhaar OTP request route:', error);
     return res.status(500).json({
+      status: "error",
       success: false,
       message: 'Error during Aadhaar OTP request',
       error: error.message
@@ -183,6 +186,7 @@ router.post('/aadhaar/verify', async (req, res) => {
     const result = await cashfreeService.verifyAadhaar(idProof, name, otp, requestId);
     
     return res.json({
+      status: result.verified ? "success" : "error",
       success: result.verified,
       message: result.message,
       data: result.data
@@ -190,6 +194,7 @@ router.post('/aadhaar/verify', async (req, res) => {
   } catch (error) {
     console.error('Error in Aadhaar verification route:', error);
     return res.status(500).json({
+      status: "error",
       success: false,
       message: 'Error during Aadhaar verification',
       error: error.message
@@ -363,8 +368,8 @@ router.post('/gstin', async (req, res) => {
     const result = await cashfreeService.verifyGSTIN(idProof);
     
     return res.json({
-      status: "success",
-      success: result.verified,
+      status: result.invalid ? "invalid" : result.verified ? "success" : "error",
+      success: result.invalid ? false : result.verified,
       message: result.message,
       data: result.data
     });

@@ -127,7 +127,7 @@ const verifyPAN = async (panNumber, name = '') => {
     
     // Using snake_case for consistency with Aadhaar endpoint
     const payload = {
-      pan_number: panNumber,
+      pan: panNumber,
       name: name || ''
     };
     
@@ -142,7 +142,7 @@ const verifyPAN = async (panNumber, name = '') => {
     );
 
     const result = response.data;
-    const verified = result.status === 'SUCCESS' || result.status === 'VALID';
+    const verified = result.valid === true;
 
     // Cache successful verifications
     if (verified) {
@@ -151,6 +151,7 @@ const verifyPAN = async (panNumber, name = '') => {
         ...result
       });
     }
+    console.log('PAN Verification Response:', { result });
 
     return {
       verified,
@@ -247,7 +248,8 @@ const verifyAadhaar = async (idProof, name = '', otp = '', requestId = '') => {
     // Payload for OTP verification
     const payload = {
       otp: otp,
-      request_id: requestId
+      request_id: requestId,
+      ref_id: requestId
     };
     
     const headers = getCashfreeHeaders();
@@ -402,7 +404,9 @@ const verifyGSTIN = async (gstinNumber) => {
     const result = response.data;
     const verified = result.status === 'SUCCESS' || result.valid === true;
 
+    const invalid = result.message === 'GSTIN Doesn\'t Exist';
     // Cache successful verifications
+    console.log('GSTIN Verification Result:', { verified, invalid, result });
     if (verified) {
       cacheResult('gstin', gstinNumber, {
         verified,
@@ -412,7 +416,8 @@ const verifyGSTIN = async (gstinNumber) => {
 
     return {
       verified,
-      status: "success",
+      invalid,
+      status: invalid ? "invalid" : verified ? "success" : "error",
       message: verified ? 'GSTIN verified successfully' : 'GSTIN verification failed',
       data: result
     };
