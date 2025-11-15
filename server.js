@@ -1,6 +1,6 @@
 const app = require('./app');
 const dotenv = require('dotenv');
-// const { initDatabase } = require('./utils/database');
+const { initDatabase } = require('./utils/database');
 
 // Load environment variables
 dotenv.config();
@@ -11,6 +11,8 @@ const PORT = isProd ? process.env.PROD_PORT : process.env.PORT || process.env.DE
 // Initialize the database
 const startServer = async () => {
   try {
+    // Initialize the database
+    await initDatabase();
     // Start the server
     app.listen(PORT, () => {
       console.log(`Server running in ${isProd ? 'production' : 'development'} mode on port ${PORT}`);

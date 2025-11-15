@@ -4,9 +4,12 @@ const { ProductRequest } = require("../models/ProductRequest");
 const { Warehouse } = require("../models/Warehouse");
 const { ProductCategoryProduct } = require("../models/ProductCategoryProduct");
 const { ProductLabelsProduct } = require("../models/ProductLabelsProduct");
-const {
-  ProductCollectionProduct,
-} = require("../models/ProductCollectionProduct");
+const { ProductLabel } = require("../models/ProductLabel");
+const { ProductCollection } = require("../models/ProductCollection");
+const { ProductCollectionProduct } = require("../models/ProductCollectionProduct");
+const { ProductRequestCategoryProduct } = require("../models/ProductRequestCategoryProduct");
+const { ProductRequestCollectionProduct } = require("../models/ProductRequestCollectionProduct");
+const { ProductRequestLabelsProduct } = require("../models/ProductRequestLabelsProduct");
 const { ProductCategory } = require("../models/ProductCategory");
 const { Vendor } = require("../models/Vendor");
 const { Payment } = require("../models/Payment");
@@ -15,11 +18,14 @@ const { OrderHistory } = require("../models/OrderHistory");
 const { Customer } = require("../models/Customer");
 const { Tax } = require("../models/Tax");
 const { Brands } = require("../models/Brand");
+const { Op } = require("sequelize");
 const bcrypt = require("bcryptjs");
 const AppError = require("../utils/AppError");
 const jwt = require("jsonwebtoken");
 const cashfreeService = require("../services/cashfreeService");
 const { Store } = require("../models/Store");
+const { Slug } = require("../models/Slug");
+const SlugService = require("../services/slugService");
 const {
   uploadProductImagesToRemote,
 } = require("../services/remoteImageService");
@@ -69,7 +75,9 @@ exports.getDashboard = async (req, res, next) => {
     const totalRevenue = await Payment.sum("amount", {
       where: { status: "completed" },
     });
-    const pendingOrders = await Order.count({ where: { status: "pending" } });
+
+    //Pending orders where status is pending and is_finished is not equal to false
+    const pendingOrders = await Order.count({ where: { status: "pending", is_finished: { [Op.ne]: false } } });
 
     const OrderHistoryData = await OrderHistory.findAll({
       limit: 10,
@@ -963,6 +971,7 @@ exports.ApproveProductRequest = async (req, res, next) => {
   try {
     const { id } = req.params;
     const productRequest = await ProductRequest.findByPk(id);
+    console.log(productRequest);
     if (!productRequest) {
       return next(new AppError("Product request not found", 404));
     }
@@ -972,16 +981,136 @@ exports.ApproveProductRequest = async (req, res, next) => {
     const category = await ProductCategory.findByPk(productRequest.category);
     productRequest.category = category;
     const vendor = await Vendor.findByPk(productRequest.vendor_id);
+    if (!vendor) {
+      return next(new AppError("Vendor not found", 404));
+    }
+    
+    // Fetch vendor's store
+    const vendorStore = await Store.findOne({ where: { customer_id: vendor.id } });
+    if (!vendorStore) {
+      return next(new AppError("Vendor store not found. Please create a store for this vendor first.", 404));
+    }
+    
     const warehouse = await Warehouse.findByPk(productRequest.warehouse_id);
+    
+    // Copy all data from ProductRequest to Product
+    // Convert arrays to JSON strings for images and videos
+    const images = productRequest?.images;
+    const videos = productRequest?.videos;
+    
+    const ProductData = await Product.create({
+      name: productRequest?.name,
+      description: productRequest?.description,
+      content: productRequest?.content,
+      status: 'published', // Set status as published when approved
+      images: Array.isArray(images) ? JSON.stringify(images) : images,
+      sku: productRequest?.sku,
+      order: productRequest?.order || 0,
+      quantity: productRequest?.quantity,
+      allow_checkout_when_out_of_stock: productRequest?.allow_checkout_when_out_of_stock,
+      with_storehouse_management: productRequest?.with_storehouse_management,
+      is_featured: productRequest?.is_featured,
+      brand_id: productRequest?.brand_id,
+      is_variation: productRequest?.is_variation,
+      sale_type: productRequest?.sale_type || 0,
+      price: productRequest?.price,
+      sale_price: productRequest?.sale_price,
+      start_date: productRequest?.start_date,
+      end_date: productRequest?.end_date,
+      length: productRequest?.length,
+      wide: productRequest?.wide,
+      height: productRequest?.height,
+      weight: productRequest?.weight,
+      tax_id: productRequest?.tax_id,
+      views: productRequest?.views || 0,
+      stock_status: productRequest?.stock_status || 'in_stock',
+      store_id: vendorStore.id, // Assign vendor's store_id
+      created_by_id: productRequest?.created_by_id,
+      created_by_type: productRequest?.created_by_type || 'Botble\\ACL\\Models\\User',
+      approved_by: productRequest?.approved_by,
+      image: productRequest?.image,
+      category: productRequest?.category,
+      sub_category: productRequest?.sub_category,
+      videos: Array.isArray(videos) ? JSON.stringify(videos) : videos,
+      shipping_charges: productRequest?.shipping_charges,
+      shipping_included: productRequest?.shipping_included,
+      purchase_price: productRequest?.purchase_price,
+      hsn_sac_code: productRequest?.hsn_sac_code,
+      applicable_tax: productRequest?.applicable_tax,
+      unit: productRequest?.unit,
+      warehouse_id: productRequest?.warehouse_id
+    });
+    if(!ProductData){
+      return next(new AppError("Product not created", 400));
+    }
+    
+    // Copy collections from ProductRequest to Product
+    const requestCollections = await ProductRequestCollectionProduct.findAll({
+      where: { product_request_id: productRequest.id }
+    });
+    
+    if (requestCollections && requestCollections.length > 0) {
+      const collectionData = requestCollections.map(rc => ({
+        product_id: ProductData.id,
+        product_collection_id: rc.product_collection_id
+      }));
+      await ProductCollectionProduct.bulkCreate(collectionData);
+    }
+    
+    // Copy labels from ProductRequest to Product
+    const requestLabels = await ProductRequestLabelsProduct.findAll({
+      where: { product_request_id: productRequest.id }
+    });
+    
+    if (requestLabels && requestLabels.length > 0) {
+      const labelData = requestLabels.map(rl => ({
+        product_id: ProductData.id,
+        product_label_id: rl.product_label_id
+      }));
+      await ProductLabelsProduct.bulkCreate(labelData);
+    }
+    
+    // Copy category from ProductRequest to Product
+    const requestCategories = await ProductRequestCategoryProduct.findAll({
+      where: { product_request_id: productRequest.id }
+    });
+    
+    if (requestCategories && requestCategories.length > 0) {
+      const categoryData = requestCategories.map(rc => ({
+        product_id: ProductData.id,
+        category_id: rc.category_id
+      }));
+      await ProductCategoryProduct.bulkCreate(categoryData);
+    } else if (productRequest.category_id) {
+      // Fallback: if category_id exists directly on productRequest
+      await ProductCategoryProduct.create({
+        category_id: productRequest.category_id,
+        product_id: ProductData.id
+      });
+    }
+    
+    // Create slug for the product
+    const slugData = await SlugService.createProductSlug(ProductData.name, ProductData.id);
+    
     res.status(200).json({
       status: "success",
+      message: "Product request approved successfully",
       data: {
         productRequest: updatedProductRequest,
         vendor,
+        store: vendorStore,
         warehouse,
+        product: ProductData,
+        categories: requestCategories,
+        collections: requestCollections,
+        labels: requestLabels,
+        slug: slugData.slug,
+        productUrl: slugData.url,
+        fullProductUrl: slugData.fullUrl
       },
     });
   } catch (error) {
+    console.log(error);
     next(error);
   }
 };
@@ -1122,9 +1251,11 @@ exports.getProduct = async (req, res, next) => {
     });
     const productLabels = await ProductLabelsProduct.findAll({
       where: { product_id: id },
+      include: [ProductLabel]
     });
     const productCollections = await ProductCollectionProduct.findAll({
       where: { product_id: id },
+      include: [ProductCollection]
     });
     res.status(200).json({
       status: "success",

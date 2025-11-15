@@ -63,6 +63,7 @@ const router = express.Router();
  *         $ref: '#/components/responses/ServerError'
  */
 router.get('/', authenticate, productController.getAllProducts); // Added authentication
+router.get('/social', authenticate, productController.getAllProductsForSocial); // Added authentication
 
 router.get('/taxes', authenticate, productController.getTaxes);
 router.get('/labels', authenticate, productController.getLabels);

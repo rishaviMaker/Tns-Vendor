@@ -38,11 +38,11 @@ const Customer = sequelize.define(
       allowNull: true,
       comment: "FCM token of customer",
     },
-    remember_token: {
-      type: DataTypes.STRING,
-      allowNull: true,
-      comment: "Remember token of customer",
-    },
+    // remember_token: {
+    //   type: DataTypes.STRING,
+    //   allowNull: true,
+    //   comment: "Remember token of customer",
+    // },
     created_at: {
       type: DataTypes.DATE,
       allowNull: true,
@@ -59,8 +59,8 @@ const Customer = sequelize.define(
       comment: "Confirmed at of customer",
     },
     status: {
-      type: DataTypes.ENUM("activated", "locked"),
-      defaultValue: "activated",
+      type: DataTypes.ENUM("active", "locked"),
+      defaultValue: "active",
     },
   },
   {

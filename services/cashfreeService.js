@@ -27,6 +27,89 @@ const verificationCache = {
 // Expiry time for cache entries (24 hours)
 const CACHE_EXPIRY_MS = 24 * 60 * 60 * 1000;
 
+// Name matching threshold (60% similarity required for flexible matching)
+// Adjust this value based on your requirements:
+// - 0.50 (50%): Very lenient, allows significant differences
+// - 0.60 (60%): Balanced, handles middle names and minor variations
+// - 0.70 (70%): Moderate, requires closer match
+// - 0.80 (80%): Strict, only minor typos allowed
+const NAME_MATCH_THRESHOLD = 0.50;
+
+/**
+ * Calculate similarity between two strings using Levenshtein distance
+ * @param {string} str1 - First string
+ * @param {string} str2 - Second string
+ * @returns {number} Similarity score between 0 and 1
+ */
+const calculateStringSimilarity = (str1, str2) => {
+  if (!str1 || !str2) return 0;
+  
+  // Normalize strings: lowercase, remove extra spaces, remove special characters
+  const normalize = (str) => str.toLowerCase().trim().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ');
+  
+  const s1 = normalize(str1);
+  const s2 = normalize(str2);
+  
+  // If strings are identical after normalization
+  if (s1 === s2) return 1;
+  
+  // Check if one name contains the other (partial match)
+  if (s1.includes(s2) || s2.includes(s1)) {
+    const longer = Math.max(s1.length, s2.length);
+    const shorter = Math.min(s1.length, s2.length);
+    return shorter / longer;
+  }
+  
+  // Levenshtein distance algorithm
+  const matrix = [];
+  const len1 = s1.length;
+  const len2 = s2.length;
+  
+  // Initialize matrix
+  for (let i = 0; i <= len1; i++) {
+    matrix[i] = [i];
+  }
+  for (let j = 0; j <= len2; j++) {
+    matrix[0][j] = j;
+  }
+  
+  // Fill matrix
+  for (let i = 1; i <= len1; i++) {
+    for (let j = 1; j <= len2; j++) {
+      const cost = s1[i - 1] === s2[j - 1] ? 0 : 1;
+      matrix[i][j] = Math.min(
+        matrix[i - 1][j] + 1,      // deletion
+        matrix[i][j - 1] + 1,      // insertion
+        matrix[i - 1][j - 1] + cost // substitution
+      );
+    }
+  }
+  
+  const distance = matrix[len1][len2];
+  const maxLength = Math.max(len1, len2);
+  
+  // Return similarity score (1 - normalized distance)
+  return 1 - (distance / maxLength);
+};
+
+/**
+ * Check if two names match with a given threshold
+ * @param {string} name1 - First name
+ * @param {string} name2 - Second name
+ * @param {number} threshold - Minimum similarity threshold (default 0.50 = 50%)
+ * @returns {Object} Match result with similarity score
+ */
+const checkNameMatch = (name1, name2, threshold = NAME_MATCH_THRESHOLD) => {
+  const similarity = calculateStringSimilarity(name1, name2);
+  const matched = similarity >= threshold;
+  
+  return {
+    matched,
+    similarity: Math.round(similarity * 100), // Convert to percentage
+    threshold: Math.round(threshold * 100)
+  };
+};
+
 /**
  * Helper to get authentication headers for Cashfree API requests
  * @returns {Object} Headers with authentication details
@@ -144,6 +227,28 @@ const verifyPAN = async (panNumber, name = '') => {
     const result = response.data;
     const verified = result.valid === true;
 
+    // Check name match if name is provided
+    if (verified && name && result.registered_name) {
+      const nameMatchResult = checkNameMatch(name, result.registered_name);
+      
+      if (!nameMatchResult.matched) {
+        return {
+          verified: false,
+          message: `Name mismatch: PAN card name does not match with provided name (${nameMatchResult.similarity}% similarity, ${nameMatchResult.threshold}% required)`,
+          data: {
+            providedName: name,
+            panName: result.registered_name,
+            verified: false,
+            nameSimilarity: nameMatchResult.similarity,
+            requiredSimilarity: nameMatchResult.threshold
+          }
+        };
+      }
+      
+      // Log successful name match
+      console.log(`✅ Name match successful: ${nameMatchResult.similarity}% similarity`);
+    }
+    
     // Cache successful verifications
     if (verified) {
       cacheResult('pan', panNumber, {
@@ -264,6 +369,28 @@ const verifyAadhaar = async (idProof, name = '', otp = '', requestId = '') => {
 
     const result = response.data;
     const verified = result.status === 'SUCCESS' || result.status === 'VALID';
+    
+    // Check name match if name is provided
+    if (verified && name && result.name) {
+      const nameMatchResult = checkNameMatch(name, result.name);
+      
+      if (!nameMatchResult.matched) {
+        return {
+          verified: false,
+          message: `Name mismatch: Aadhaar card name does not match with provided name (${nameMatchResult.similarity}% similarity, ${nameMatchResult.threshold}% required)`,
+          data: {
+            providedName: name,
+            aadhaarName: result.name,
+            verified: false,
+            nameSimilarity: nameMatchResult.similarity,
+            requiredSimilarity: nameMatchResult.threshold
+          }
+        };
+      }
+      
+      // Log successful name match
+      console.log(`✅ Name match successful: ${nameMatchResult.similarity}% similarity`);
+    }
 
     // Cache successful verifications
     if (verified) {

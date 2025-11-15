@@ -23,11 +23,11 @@ const initDatabase = async (force = false) => {
       console.log('Selectively syncing database models');
       
       // Only sync Vendor and OTP models with force option
-      await Vendor.sync({ force: true });
-      await OTP.sync({ force: true });
+      // await Vendor.sync({ force: true });
+      // await OTP.sync({ force: true });
       
-      // Sync Store model without force to preserve existing data
-      await Store.sync({ alter: true });
+      // // Sync Store model without force to preserve existing data
+      // await Store.sync({ alter: true });
       
       // Don't sync Product model at all to ensure we don't modify the ec_products table
       // This model will be used for querying only
@@ -39,7 +39,7 @@ const initDatabase = async (force = false) => {
       await createSampleData();
     } else {
       console.log('Syncing database without dropping existing tables');
-      // await sequelize.sync();
+      await sequelize.sync();
       console.log('Database synchronized successfully');
     }
     
@@ -59,23 +59,23 @@ const initDatabase = async (force = false) => {
 const createSampleData = async () => {
   try {
     // Create sample vendor
-    const vendor = await Vendor.create({
-      fullName: 'Test Vendor',
-      email: 'vendor@example.com',
-      password: 'password123',
-      businessType: 'Wholesaler',
-      mobileNumber: '1234567890',
-      alternativeMobileNumber: '9876543210',
-      position: 'Owner',
-      idProofType: 'Aadhar Card',
-      companyName: 'Sample Vendor Business',
-      street: '123 Vendor St',
-      city: 'Vendor City',
-      state: 'VS',
-      postalCode: '12345',
-      country: 'India',
-      status: 'pending'
-    });
+    // const vendor = await Vendor.create({
+    //   fullName: 'Test Vendor',
+    //   email: 'vendor@example.com',
+    //   password: 'password123',
+    //   businessType: 'Wholesaler',
+    //   mobileNumber: '1234567890',
+    //   alternativeMobileNumber: '9876543210',
+    //   position: 'Owner',
+    //   idProofType: 'Aadhar Card',
+    //   companyName: 'Sample Vendor Business',
+    //   street: '123 Vendor St',
+    //   city: 'Vendor City',
+    //   state: 'VS',
+    //   postalCode: '12345',
+    //   country: 'India',
+    //   status: 'pending'
+    // });
 
     console.log('Sample vendor data created successfully');
   } catch (error) {

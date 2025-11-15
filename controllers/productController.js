@@ -206,6 +206,48 @@ exports.getAllProducts = async (req, res, next) => {
   }
 };
 
+
+exports.getAllProductsForSocial = async (req, res, next) => {
+  try {
+
+    const vendorId = req.user.id;
+
+    // Find store associated with this vendor
+    const store = await Store.findOne({ where: { customer_id: vendorId } });
+
+    if (!store) {
+      return res.status(404).json({
+        status: "fail",
+        message: "No store found for this vendor. Please create a store first.",
+      });
+    }
+
+    const queryOptions = {
+      where: { store_id: store.id }, // Filter by vendor's store only
+      order: [["created_at", "DESC"]],
+    };
+
+    const { count, rows: products } = await Product.findAndCountAll(
+      queryOptions
+    );
+
+    products.forEach((product) => {
+      product.images = JSON.parse(product.images);
+    });
+
+    res.status(200).json({
+      status: "success",
+      results: products.length,
+      total: count,
+      data: {
+        products,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 /**
  * Get product by ID
  * @route GET /api/products/:id
@@ -366,6 +408,12 @@ exports.createAdminProduct = async (req, res, next) => {
     // Gather images provided in body (if any)
     const bodyImageUrls = parseList(req.body.images);
 
+    const generateSKU = () => {
+          const timestamp = Date.now();
+          const randomStr = Math.random().toString(36).substring(2, 8).toUpperCase();
+          return `SKU-${timestamp}-${randomStr}`;
+        };
+        const finalSku = sku || generateSKU();
     // Create base product
     const productData = {
       name,
@@ -374,7 +422,7 @@ exports.createAdminProduct = async (req, res, next) => {
       price: parseFloat(price),
       sale_price: sale_price ? parseFloat(sale_price) : null,
       quantity: parseInt(quantity),
-      sku,
+      sku: finalSku,
       store_id,
       status: "published",
       is_variation: false,

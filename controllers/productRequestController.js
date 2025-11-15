@@ -3,8 +3,9 @@ const { Product } = require('../models/Product');
 const { Vendor } = require('../models/Vendor');
 const { Store } = require('../models/Store');
 const { ProductCategoryProduct } = require('../models/ProductCategoryProduct');
-const { ProductCollectionProduct } = require('../models/ProductCollectionProduct');
-const { ProductLabelsProduct } = require('../models/ProductLabelsProduct');
+const { ProductRequestCategoryProduct } = require('../models/ProductRequestCategoryProduct');
+const { ProductRequestCollectionProduct } = require('../models/ProductRequestCollectionProduct');
+const { ProductRequestLabelsProduct } = require('../models/ProductRequestLabelsProduct');
 const { ProductCategory } = require('../models/ProductCategory');
 const { Warehouse } = require('../models/Warehouse');
 const AppError = require('../utils/AppError');
@@ -125,6 +126,14 @@ const productRequestController = {
         // Parse videos list if provided
         const videosParsed = parseList(videos);
 
+        // Auto-generate SKU if not provided
+        const generateSKU = () => {
+          const timestamp = Date.now();
+          const randomStr = Math.random().toString(36).substring(2, 8).toUpperCase();
+          return `SKU-${timestamp}-${randomStr}`;
+        };
+        const finalSku = sku || generateSKU();
+
         // Create product request (first), then upload images using its ID
         const primaryImage = image || (bodyImageUrls && bodyImageUrls.length ? bodyImageUrls[0] : null);
         const productRequest = await ProductRequest.create({
@@ -140,7 +149,7 @@ const productRequestController = {
           image: primaryImage,
           status: 'pending',
           // Extended optional fields (only set if provided)
-          description, content, sku, order,
+          description, content, sku: finalSku, order,
           allow_checkout_when_out_of_stock: allow_checkout_when_out_of_stock !== undefined ? toBool(allow_checkout_when_out_of_stock) : undefined,
           with_storehouse_management: with_storehouse_management !== undefined ? toBool(with_storehouse_management) : undefined,
           is_featured: is_featured !== undefined ? toBool(is_featured) : undefined,
@@ -180,9 +189,9 @@ const productRequestController = {
         });
 
         if (category_id) {
-          await ProductCategoryProduct.create({
+          await ProductRequestCategoryProduct.create({
             category_id: category_id,
-            product_id: productRequest.id
+            product_request_id: productRequest.id
           });
         }
 
@@ -195,11 +204,11 @@ const productRequestController = {
           }
     
           const collectionData = parsedCollections.map((collection) => ({
-            product_id: productRequest.id,
+            product_request_id: productRequest.id,
             product_collection_id: collection,
           }));
     
-          collectionProduct = await ProductCollectionProduct.bulkCreate(
+          collectionProduct = await ProductRequestCollectionProduct.bulkCreate(
             collectionData
           );
         }
@@ -210,10 +219,10 @@ const productRequestController = {
             parsedLabels = JSON.parse(labels);
           }
           const labelsData = parsedLabels.map((label) => ({
-            product_id: productRequest.id,
+            product_request_id: productRequest.id,
             product_label_id: label,
           }));
-          labelProduct = await ProductLabelsProduct.bulkCreate(labelsData);
+          labelProduct = await ProductRequestLabelsProduct.bulkCreate(labelsData);
         }
 
         // productRequest.image = JSON.parse(productRequest.image);

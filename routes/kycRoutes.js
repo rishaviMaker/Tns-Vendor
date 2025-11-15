@@ -1,6 +1,7 @@
 const express = require('express');
 const { authenticate } = require('../middlewares/auth');
 const cashfreeService = require('../services/cashfreeService');
+const { Vendor } = require('../models/Vendor');
 
 const router = express.Router();
 
@@ -54,7 +55,50 @@ router.post('/pan', async (req, res) => {
       });
     }
     
+    // Verify PAN with Cashfree
     const result = await cashfreeService.verifyPAN(idProof, name);
+    
+    // If PAN verification is successful, cross-check with Aadhaar data
+    if (result.verified && req.user && req.user.id) {
+      const vendor = await Vendor.findByPk(req.user.id);
+      
+      // Check if vendor has verified Aadhaar
+      if (vendor && vendor.isAadharVerified && vendor.kycVerificationData) {
+        const aadhaarData = vendor.kycVerificationData.aadhaar;
+        
+        if (aadhaarData && aadhaarData.data) {
+          // Extract names from both documents
+          const panName = result.data?.registered_name || result.data?.name || '';
+          const aadhaarName = aadhaarData.data?.name || aadhaarData.data?.full_name || '';
+          
+          // Normalize names for comparison (remove extra spaces, convert to lowercase)
+          const normalizeName = (name) => name.trim().toLowerCase().replace(/\s+/g, ' ');
+          
+          if (panName && aadhaarName) {
+            const normalizedPanName = normalizeName(panName);
+            const normalizedAadhaarName = normalizeName(aadhaarName);
+            
+            // Check if names match (exact or partial match)
+            const namesMatch = normalizedPanName === normalizedAadhaarName || 
+                              normalizedPanName.includes(normalizedAadhaarName) ||
+                              normalizedAadhaarName.includes(normalizedPanName);
+            
+            if (!namesMatch) {
+              return res.status(400).json({
+                status: 'error',
+                success: false,
+                message: 'Name mismatch: PAN card name does not match with Aadhaar card name',
+                data: {
+                  panName: panName,
+                  aadhaarName: aadhaarName,
+                  verified: false
+                }
+              });
+            }
+          }
+        }
+      }
+    }
     
     return res.json({
       status: result.verified ? "success" : "error",

@@ -943,6 +943,15 @@ exports.sendOTP = async (req, res, next) => {
       return next(new AppError('Invalid mobile number format. Must be 10 digits', 400));
     }
 
+    // Check if mobile number is already registered
+    const existingVendor = await Vendor.findOne({
+      where: { mobileNumber }
+    });
+
+    if (existingVendor) {
+      return next(new AppError('Mobile number is already registered. Please login instead.', 400));
+    }
+
     // Generate and send OTP
     const otpRecord = await otpService.createOTP(mobileNumber);
     const otpSent = await otpService.sendOTP(mobileNumber, otpRecord.otp, deviceToken);
